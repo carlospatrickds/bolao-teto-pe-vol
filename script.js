@@ -1,11 +1,11 @@
-// Configurações
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTTqRYCxqqTeJLzCpTWOy9CAN_Dh8pWyQquoWLDeCtT8ThDgt4kqi40F5tEXnbAwEVqnzC01MZbOHqT/pub?output=csv';
+// Configurações - URL da planilha Google Sheets
+const SHEET_ID = '2PACX-1vTTqRYCxqqTeJLzCpTWOy9CAN_Dh8pWyQquoWLDeCtT8ThDgt4kqi40F5tEXnbAwEVqnzC01MZbOHqT';
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?output=csv`;
 
 // Estado global
 let appData = {
     participantes: [],
     jogos: [],
-    resultados: {},
     totalRodadas: 0
 };
 
@@ -27,35 +27,63 @@ async function initApp() {
         renderizarEstatisticas();
     } catch (error) {
         console.error('Erro ao carregar dados:', error);
-        alert('Erro ao carregar dados da planilha. Tente novamente mais tarde.');
+        mostrarErroCarregamento();
     } finally {
-        showLoading(false);
+        setTimeout(() => showLoading(false), 500);
     }
 }
 
 // Carregar dados da planilha
 async function carregarDados() {
-    const response = await fetch(SHEET_URL);
-    const csvText = await response.text();
-    const rows = parseCSV(csvText);
-    
-    // Processar dados
-    processarDados(rows);
+    try {
+        const response = await fetch(SHEET_URL);
+        if (!response.ok) {
+            throw new Error('Erro ao buscar dados da planilha');
+        }
+        
+        const csvText = await response.text();
+        console.log('CSV recebido:', csvText.substring(0, 500));
+        
+        const rows = parseCSV(csvText);
+        console.log('Rows parseados:', rows);
+        
+        processarDados(rows);
+    } catch (error) {
+        console.error('Erro no fetch:', error);
+        throw error;
+    }
 }
 
 // Parse CSV
 function parseCSV(text) {
     const lines = text.split('\n').filter(line => line.trim());
-    const headers = lines[0].split(',').map(h => sanitize(h));
+    const rows = [];
     
-    return lines.slice(1).map(line => {
-        const values = line.split(',').map(v => sanitize(v));
-        const obj = {};
-        headers.forEach((header, index) => {
-            obj[header] = values[index] || '';
-        });
-        return obj;
-    });
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // Parse simples de CSV (considerando vírgulas)
+        const values = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let char of line) {
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                values.push(sanitize(current));
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        values.push(sanitize(current));
+        
+        rows.push(values);
+    }
+    
+    return rows;
 }
 
 // Sanitizar string
@@ -65,52 +93,58 @@ function sanitize(str) {
 
 // Processar dados da planilha
 function processarDados(rows) {
+    console.log('Processando dados...', rows.length, 'linhas');
+    
     const participantes = [];
-    const jogos = [];
-    const resultados = {};
+    const jogos = new Map();
     
-    // Identificar colunas de jogos (a partir da coluna D)
-    let colunasJogos = [];
-    
-    rows.forEach((row, index) => {
-        if (index === 0) {
-            // Primeira linha após header - identificar colunas de jogos
-            Object.keys(row).forEach((key, i) => {
-                if (i >= 3) { // Colunas D em diante
-                    if (row[key] && (row[key].includes('x') || row[key].includes('Argentina') || row[key].includes('Colômbia'))) {
-                        colunasJogos.push(key);
-                        // Extrair nome do jogo
-                        const nomeJogo = extrairNomeJogo(key);
-                        jogos.push({
-                            id: i,
-                            nome: nomeJogo,
-                            coluna: key
-                        });
-                    }
-                }
-            });
+    // Encontrar o cabeçalho (linha com "Posição,Participante,Pontos")
+    let headerIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+        if (rows[i][0] === 'Posição' && rows[i][1] === 'Participante') {
+            headerIndex = i;
+            break;
         }
-    });
+    }
+    
+    if (headerIndex === -1) {
+        console.warn('Cabeçalho não encontrado, tentando linha 0');
+        headerIndex = 0;
+    }
+    
+    // Identificar colunas de jogos (a partir da coluna 3)
+    const headerRow = rows[headerIndex];
+    for (let i = 3; i < headerRow.length; i++) {
+        if (headerRow[i] && headerRow[i].includes('x')) {
+            jogos.set(i, headerRow[i]);
+        }
+    }
+    
+    console.log('Jogos encontrados:', Array.from(jogos.values()));
     
     // Processar participantes
-    rows.forEach((row, index) => {
-        if (index === 0) return; // Pular header
+    for (let i = headerIndex + 1; i < rows.length; i++) {
+        const row = rows[i];
+        
+        // Pular linhas vazias ou sem participante
+        if (!row[1] || row[1].trim() === '') continue;
         
         const participante = {
-            posicao: parseInt(row['Posição']) || index,
-            nome: row['Participante'] || `Participante ${index}`,
-            pontos: parseInt(row['Pontos']) || 0,
+            posicao: row[0] || '',
+            nome: row[1] || `Participante ${i}`,
+            pontos: parseInt(row[2]) || 0,
             palpites: {}
         };
         
         // Extrair palpites
-        jogos.forEach(jogo => {
-            const palpite = row[jogo.coluna] || '';
-            participante.palpites[jogo.nome] = extrairPalpite(palpite);
+        jogos.forEach((nomeJogo, colIndex) => {
+            if (row[colIndex]) {
+                participante.palpites[nomeJogo] = extrairPalpite(row[colIndex]);
+            }
         });
         
         participantes.push(participante);
-    });
+    }
     
     // Ordenar por pontos
     participantes.sort((a, b) => b.pontos - a.pontos);
@@ -121,25 +155,21 @@ function processarDados(rows) {
     });
     
     appData.participantes = participantes;
-    appData.jogos = jogos;
-    appData.totalRodadas = jogos.length;
+    appData.jogos = Array.from(jogos.values());
+    appData.totalRodadas = jogos.size;
     
-    // Calcular estatísticas adicionais
-    calcularEstatisticas();
-}
-
-// Extrair nome do jogo da célula
-function extrairNomeJogo(celula) {
-    // Remove números e mantém apenas o texto do jogo
-    return celula.replace(/\d+x\d+/g, '').trim();
+    console.log('Dados processados:', {
+        participantes: participantes.length,
+        jogos: appData.jogos.length
+    });
 }
 
 // Extrair palpite da célula
 function extrairPalpite(celula) {
-    if (!celula) return null;
+    if (!celula || celula === '-') return null;
     
     // Procurar padrão de placar (ex: 2x1, 3x0)
-    const match = celula.match(/(\d+)x(\d+)/);
+    const match = celula.match(/(\d+)\s*x\s*(\d+)/);
     if (match) {
         return {
             placar: `${match[1]}x${match[2]}`,
@@ -147,37 +177,9 @@ function extrairPalpite(celula) {
             time2: parseInt(match[2])
         };
     }
-    return null;
-}
-
-// Calcular estatísticas
-function calcularEstatisticas() {
-    let totalPlacaresExatos = 0;
-    let participantesPontuaram = 0;
-    let totalPalpites = 0;
-    let palpitesPreenchidos = 0;
     
-    appData.participantes.forEach(p => {
-        if (p.pontos > 0) participantesPontuaram++;
-        
-        Object.values(p.palpites).forEach(palpite => {
-            totalPalpites++;
-            if (palpite) {
-                palpitesPreenchidos++;
-                // Verificar se é placar exato (simplificado)
-                if (palpite.time1 === palpite.time2 && palpite.time1 > 0) {
-                    // Lógica simplificada - na prática precisaria dos resultados reais
-                }
-            }
-        });
-    });
-    
-    appData.estatisticas = {
-        totalParticipantes: appData.participantes.length,
-        participantesPontuaram,
-        totalPlacaresExatos,
-        participacaoMedia: totalPalpites > 0 ? (palpitesPreenchidos / totalPalpites * 100).toFixed(1) : 0
-    };
+    // Se não encontrou placar, retorna o texto como está
+    return { placar: celula, time1: null, time2: null };
 }
 
 // Renderizar Classificação
@@ -185,17 +187,30 @@ function renderizarClassificacao() {
     const tbody = document.getElementById('rankingBody');
     const top3Container = document.getElementById('top3Container');
     
+    if (appData.participantes.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align: center; padding: 2rem;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: var(--amarelo);"></i>
+                    <p>Nenhum dado encontrado na planilha</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
     tbody.innerHTML = '';
     top3Container.innerHTML = '';
     
     // Top 3
     const top3 = appData.participantes.slice(0, 3);
-    const medals = ['🥇', '🥈', ''];
+    const medals = ['🥇', '🥈', '🥉'];
     const classes = ['first', 'second', 'third'];
     
     top3.forEach((p, i) => {
         const card = document.createElement('div');
         card.className = `top-card ${classes[i]}`;
+        card.style.animationDelay = `${i * 0.1}s`;
         card.innerHTML = `
             <div class="top-medal">${medals[i]}</div>
             <div class="top-nome">${p.nome}</div>
@@ -209,6 +224,7 @@ function renderizarClassificacao() {
     appData.participantes.forEach((p, index) => {
         const tr = document.createElement('tr');
         if (index === 0) tr.classList.add('destaque-lider');
+        tr.style.animationDelay = `${index * 0.05}s`;
         
         const aproveitamento = appData.totalRodadas > 0 
             ? ((p.pontos / (appData.totalRodadas * 3)) * 100).toFixed(1) 
@@ -237,10 +253,22 @@ function renderizarPalpites() {
     const thead = document.getElementById('palpitesHead');
     const tbody = document.getElementById('palpitesBody');
     
+    if (appData.jogos.length === 0) {
+        thead.innerHTML = `
+            <tr>
+                <th colspan="2" style="text-align: center; padding: 2rem;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: var(--amarelo);"></i>
+                    <p>Nenhum jogo encontrado na planilha</p>
+                </th>
+            </tr>
+        `;
+        return;
+    }
+    
     // Header
     let headerHTML = '<tr><th class="participante-col">Participante</th>';
     appData.jogos.forEach(jogo => {
-        headerHTML += `<th>${jogo.nome}</th>`;
+        headerHTML += `<th>${jogo}</th>`;
     });
     headerHTML += '</tr>';
     thead.innerHTML = headerHTML;
@@ -252,7 +280,7 @@ function renderizarPalpites() {
         let html = `<td class="participante-col">${p.nome}</td>`;
         
         appData.jogos.forEach(jogo => {
-            const palpite = p.palpites[jogo.nome];
+            const palpite = p.palpites[jogo];
             html += `<td>${palpite ? palpite.placar : '-'}</td>`;
         });
         
@@ -263,14 +291,29 @@ function renderizarPalpites() {
 
 // Renderizar Estatísticas
 function renderizarEstatisticas() {
-    const stats = appData.estatisticas;
+    if (appData.participantes.length === 0) return;
     
-    document.getElementById('totalParticipantes').textContent = stats.totalParticipantes;
-    document.getElementById('participantesPontuaram').textContent = stats.participantesPontuaram;
+    const totalParticipantes = appData.participantes.length;
+    const participantesPontuaram = appData.participantes.filter(p => p.pontos > 0).length;
+    const totalPlacaresExatos = appData.participantes.reduce((acc, p) => {
+        return acc + Object.values(p.palpites).filter(palpite => 
+            palpite && palpite.time1 !== null && palpite.time1 === palpite.time2
+        ).length;
+    }, 0);
+    
+    const totalPalpites = appData.participantes.length * appData.totalRodadas;
+    const palpitesPreenchidos = appData.participantes.reduce((acc, p) => {
+        return acc + Object.keys(p.palpites).length;
+    }, 0);
+    
+    document.getElementById('totalParticipantes').textContent = totalParticipantes;
+    document.getElementById('participantesPontuaram').textContent = participantesPontuaram;
     document.getElementById('totalRodadas').textContent = appData.totalRodadas;
     document.getElementById('liderCampeonato').textContent = appData.participantes[0]?.nome.split(' ')[0] || '-';
-    document.getElementById('totalPlacaresExatos').textContent = stats.totalPlacaresExatos;
-    document.getElementById('participacaoTotal').textContent = stats.participacaoMedia + '%';
+    document.getElementById('totalPlacaresExatos').textContent = totalPlacaresExatos;
+    document.getElementById('participacaoTotal').textContent = totalPalpites > 0 
+        ? ((palpitesPreenchidos / totalPalpites) * 100).toFixed(1) + '%' 
+        : '0%';
     
     // Gráficos
     criarGraficos();
@@ -302,6 +345,7 @@ function criarGraficos() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
             plugins: {
                 legend: { display: false }
             },
@@ -330,6 +374,7 @@ function criarGraficos() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
             plugins: {
                 legend: {
                     position: 'right',
@@ -342,8 +387,7 @@ function criarGraficos() {
     // Gráfico de Participação
     const ctxRodadas = document.getElementById('chartRodadas').getContext('2d');
     const participacaoPorRodada = appData.jogos.map(jogo => {
-        const count = appData.participantes.filter(p => p.palpites[jogo.nome]).length;
-        return count;
+        return appData.participantes.filter(p => p.palpites[jogo]).length;
     });
     
     charts.rodadas = new Chart(ctxRodadas, {
@@ -361,6 +405,7 @@ function criarGraficos() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
             plugins: {
                 legend: { display: false }
             },
@@ -404,11 +449,9 @@ function setupEventListeners() {
 
 // Mudar aba
 function mudarAba(tabId) {
-    // Remover active de todas as abas
     document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
     
-    // Adicionar active na aba selecionada
     document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
     document.getElementById(tabId).classList.add('active');
 }
@@ -419,22 +462,28 @@ function filtrarClassificacao(termo) {
     termo = termo.toLowerCase();
     
     rows.forEach(row => {
-        const nome = row.querySelector('.participante').textContent.toLowerCase();
-        row.style.display = nome.includes(termo) ? '' : 'none';
+        const nome = row.querySelector('.participante');
+        if (nome) {
+            const textoNome = nome.textContent.toLowerCase();
+            row.style.display = textoNome.includes(termo) ? '' : 'none';
+        }
     });
 }
 
 // Buscar desempenho
 function buscarDesempenho() {
     const nome = document.getElementById('searchDesempenho').value.toLowerCase();
-    if (!nome) return;
+    if (!nome) {
+        alert('Por favor, digite um nome para buscar');
+        return;
+    }
     
     const participante = appData.participantes.find(p => 
         p.nome.toLowerCase().includes(nome)
     );
     
     if (!participante) {
-        alert('Participante não encontrado!');
+        alert('Participante não encontrado! Tente buscar por parte do nome.');
         return;
     }
     
@@ -444,8 +493,10 @@ function buscarDesempenho() {
     document.getElementById('desempenhoPontos').textContent = participante.pontos;
     document.getElementById('desempenhoJogos').textContent = Object.keys(participante.palpites).length;
     
-    // Calcular placares exatos (simplificado)
-    const exatos = Object.values(participante.palpites).filter(p => p && p.time1 === p.time2).length;
+    // Calcular placares exatos
+    const exatos = Object.values(participante.palpites).filter(p => 
+        p && p.time1 !== null && p.time1 === p.time2
+    ).length;
     document.getElementById('desempenhoExatos').textContent = exatos;
     
     // Preencher histórico
@@ -453,7 +504,7 @@ function buscarDesempenho() {
     tbody.innerHTML = '';
     
     appData.jogos.forEach(jogo => {
-        const palpite = participante.palpites[jogo.nome];
+        const palpite = participante.palpites[jogo];
         const tr = document.createElement('tr');
         
         let pontosJogo = 0;
@@ -461,14 +512,14 @@ function buscarDesempenho() {
         let icon = '';
         
         if (palpite) {
-            // Simulação - na prática precisaria dos resultados reais
-            pontosJogo = Math.floor(Math.random() * 4); // Placeholder
+            // Simulação - precisaria dos resultados reais para calcular corretamente
+            pontosJogo = Math.floor(Math.random() * 4);
             statusClass = pontosJogo > 0 ? 'resultado-correto' : 'resultado-errado';
             icon = pontosJogo === 3 ? '⭐' : pontosJogo > 0 ? '✅' : '❌';
         }
         
         tr.innerHTML = `
-            <td>${jogo.nome}</td>
+            <td>${jogo}</td>
             <td>${palpite ? palpite.placar : '-'}</td>
             <td class="${statusClass}">${palpite ? palpite.placar + ' ' + icon : '-'}</td>
             <td><strong>${pontosJogo}</strong></td>
@@ -497,9 +548,11 @@ function toggleTema() {
 
 // Compartilhar
 async function compartilhar() {
+    const lider = appData.participantes[0];
     const texto = `🏆 Bolão TETO-PE - Copa 2026\n\n` +
-                  `🥇 Líder: ${appData.participantes[0]?.nome} (${appData.participantes[0]?.pontos} pts)\n` +
-                  `👥 Participantes: ${appData.participantes.length}\n\n` +
+                  `🥇 Líder: ${lider?.nome} (${lider?.pontos} pts)\n` +
+                  `👥 Participantes: ${appData.participantes.length}\n` +
+                  `⚽ Jogos: ${appData.totalRodadas}\n\n` +
                   `Acesse e participe!`;
     
     if (navigator.share) {
@@ -512,7 +565,6 @@ async function compartilhar() {
             console.log('Erro ao compartilhar:', err);
         }
     } else {
-        // Fallback: copiar para clipboard
         navigator.clipboard.writeText(texto);
         alert('Classificação copiada para a área de transferência!');
     }
@@ -520,7 +572,7 @@ async function compartilhar() {
 
 // Exportar PNG
 async function exportarPNG() {
-    const element = document.querySelector('.table-container');
+    const element = document.getElementById('tableContainer');
     try {
         const canvas = await html2canvas(element);
         const link = document.createElement('a');
@@ -531,6 +583,32 @@ async function exportarPNG() {
         alert('Erro ao exportar imagem');
         console.error(err);
     }
+}
+
+// Mostrar erro
+function mostrarErroCarregamento() {
+    const tbody = document.getElementById('rankingBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="4" style="text-align: center; padding: 2rem;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--rosa); margin-bottom: 1rem;"></i>
+                <p style="font-size: 1.2rem; margin-bottom: 1rem;">Erro ao carregar dados da planilha</p>
+                <button onclick="location.reload()" class="btn-primary">
+                    <i class="fas fa-refresh"></i> Tentar Novamente
+                </button>
+            </td>
+        </tr>
+    `;
+    
+    const top3Container = document.getElementById('top3Container');
+    top3Container.innerHTML = `
+        <div class="top-card first">
+            <div class="top-medal">⚠️</div>
+            <div class="top-nome">Erro</div>
+            <div class="top-pontos">-</div>
+            <div class="top-label">Sem dados</div>
+        </div>
+    `;
 }
 
 // Loading
@@ -545,6 +623,6 @@ function showLoading(show) {
 
 // Auto-refresh a cada 5 minutos
 setInterval(() => {
-    console.log('Atualizando dados...');
+    console.log('Atualizando dados automaticamente...');
     initApp();
 }, 300000);
