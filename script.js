@@ -1,628 +1,379 @@
-// Configurações - URL da planilha Google Sheets
-const SHEET_ID = '2PACX-1vTTqRYCxqqTeJLzCpTWOy9CAN_Dh8pWyQquoWLDeCtT8ThDgt4kqi40F5tEXnbAwEVqnzC01MZbOHqT';
-const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_ID}/pub?output=csv`;
+/**
+ * BOLÃO TETO-PE - Script Principal
+ * Lógica de processamento de dados e renderização da interface
+ */
 
-// Estado global
+// URL da Planilha (Aba específica)
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTTqRYCxqqTeJLzCpTWOy9CAN_Dh8pWyQquoWLDeCtT8ThDgt4kqi40F5tEXnbAwEVqnzC01MZbOHqT/pub?gid=1254969741&single=true&output=csv';
+
 let appData = {
-    participantes: [],
-    jogos: [],
-    totalRodadas: 0
+    headers: [],
+    rows: []
 };
 
-let charts = {};
+let charts = {}; // Gerencia instâncias do Chart.js
 
-// Inicialização
+// --- Inicialização ---
 document.addEventListener('DOMContentLoaded', () => {
-    initApp();
+    initTheme();
+    setupTabs();
+    setupEventListeners();
+    fetchData(); // Busca inicial
 });
 
-async function initApp() {
-    showLoading(true);
-    
-    try {
-        await carregarDados();
-        setupEventListeners();
-        renderizarClassificacao();
-        renderizarPalpites();
-        renderizarEstatisticas();
-    } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-        mostrarErroCarregamento();
-    } finally {
-        setTimeout(() => showLoading(false), 500);
-    }
+// --- Tema (Claro/Escuro) ---
+function initTheme() {
+    const toggleBtn = document.getElementById('theme-toggle');
+    const icon = toggleBtn.querySelector('i');
+    toggleBtn.addEventListener('click', () => {
+        const body = document.documentElement;
+        if (body.getAttribute('data-theme') === 'light') {
+            body.setAttribute('data-theme', 'dark');
+            icon.classList.replace('fa-moon', 'fa-sun');
+        } else {
+            body.setAttribute('data-theme', 'light');
+            icon.classList.replace('fa-sun', 'fa-moon');
+        }
+        renderCharts(); 
+    });
 }
 
-// Carregar dados da planilha
-async function carregarDados() {
+// --- Navegação ---
+function setupTabs() {
+    const btns = document.querySelectorAll('.tab-btn');
+    const contents = document.querySelectorAll('.tab-content');
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            btns.forEach(b => b.classList.remove('active'));
+            contents.forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            const targetId = btn.getAttribute('data-target');
+            document.getElementById(targetId).classList.add('active');
+            if(targetId === 'estatisticas') renderCharts();
+        });
+    });
+}
+
+// --- Fetch de Dados com Cache Buster ---
+async function fetchData() {
     try {
-        const response = await fetch(SHEET_URL);
-        if (!response.ok) {
-            throw new Error('Erro ao buscar dados da planilha');
-        }
+        const separator = SHEET_URL.includes('?') ? '&' : '?';
+        const finalUrl = `${SHEET_URL}${separator}nocache=${new Date().getTime()}`;
+        const response = await fetch(finalUrl);
         
+        if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+
         const csvText = await response.text();
-        console.log('CSV recebido:', csvText.substring(0, 500));
+        parseCSV(csvText);
         
-        const rows = parseCSV(csvText);
-        console.log('Rows parseados:', rows);
-        
-        processarDados(rows);
+        renderClassification();
+        renderTop3();
+        renderPredictions();
+        updateGlobalStats();
     } catch (error) {
-        console.error('Erro no fetch:', error);
-        throw error;
+        console.error("Erro ao carregar dados:", error);
     }
 }
 
-// Parse CSV
-function parseCSV(text) {
-    const lines = text.split('\n').filter(line => line.trim());
-    const rows = [];
-    
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        
-        // Parse simples de CSV (considerando vírgulas)
-        const values = [];
-        let current = '';
-        let inQuotes = false;
-        
-        for (let char of line) {
-            if (char === '"') {
-                inQuotes = !inQuotes;
-            } else if (char === ',' && !inQuotes) {
-                values.push(sanitize(current));
-                current = '';
-            } else {
-                current += char;
-            }
-        }
-        values.push(sanitize(current));
-        
-        rows.push(values);
-    }
-    
-    return rows;
-}
+// --- Parser, Sanitização e Lógica de Ranking ---
+function parseCSV(csv) {
+    const lines = csv.split('\n').map(line => line.trim()).filter(line => line !== '');
+    if (lines.length === 0) return;
 
-// Sanitizar string
-function sanitize(str) {
-    return str.trim().replace(/^"|"$/g, '').replace(/""/g, '"');
-}
-
-// Processar dados da planilha
-function processarDados(rows) {
-    console.log('Processando dados...', rows.length, 'linhas');
-    
-    const participantes = [];
-    const jogos = new Map();
-    
-    // Encontrar o cabeçalho (linha com "Posição,Participante,Pontos")
     let headerIndex = -1;
-    for (let i = 0; i < rows.length; i++) {
-        if (rows[i][0] === 'Posição' && rows[i][1] === 'Participante') {
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].toLowerCase().includes('participante')) {
             headerIndex = i;
             break;
         }
     }
+    if (headerIndex === -1) headerIndex = 0;
+
+    appData.headers = lines[headerIndex].split(',').map(h => h.replace(/\r|"/g, '').trim());
     
-    if (headerIndex === -1) {
-        console.warn('Cabeçalho não encontrado, tentando linha 0');
-        headerIndex = 0;
-    }
-    
-    // Identificar colunas de jogos (a partir da coluna 3)
-    const headerRow = rows[headerIndex];
-    for (let i = 3; i < headerRow.length; i++) {
-        if (headerRow[i] && headerRow[i].includes('x')) {
-            jogos.set(i, headerRow[i]);
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante')) || appData.headers[1];
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto')) || appData.headers[2];
+    const vitoriasKey = appData.headers.find(h => h.toLowerCase().includes('vitór') || h.toLowerCase().includes('acert') || h.toLowerCase().includes('exato'));
+    const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
+    const gamesHeaders = appData.headers.slice(ptsIndex + 1);
+
+    let rawRows = lines.slice(headerIndex + 1).map(line => {
+        const values = line.split(',').map(v => v.replace(/\r|"/g, '').trim());
+        let rowData = {};
+        appData.headers.forEach((header, index) => { rowData[header] = values[index] || '-'; });
+        
+        let participacoes = 0;
+        gamesHeaders.forEach(game => {
+            if (rowData[game] && rowData[game] !== '-' && rowData[game].trim() !== '') participacoes++;
+        });
+        rowData['_participacoes'] = participacoes;
+        
+        // Calcular placares exatos se a coluna existir
+        if (vitoriasKey && rowData[vitoriasKey]) {
+            rowData['_vitorias'] = parseInt(rowData[vitoriasKey]) || 0;
+        } else {
+            rowData['_vitorias'] = 0;
+        }
+        
+        return rowData;
+    });
+
+    appData.rows = rawRows.filter(row => {
+        const nome = row[partKey];
+        const pontosRaiz = row[ptsKey];
+        if (!nome || nome === '-' || nome.toLowerCase() === 'participante' || nome.trim() === '') return false;
+        return !isNaN(parseInt(pontosRaiz));
+    });
+
+    // Ordenação com Critérios de Desempate
+    appData.rows.sort((a, b) => {
+        // 1º Critério: Pontuação Total
+        const pA = parseInt(a[ptsKey]) || 0, pB = parseInt(b[ptsKey]) || 0;
+        if (pB !== pA) return pB - pA;
+        
+        // 2º Critério: Vitórias / Placares Exatos
+        const vA = a['_vitorias'] || 0, vB = b['_vitorias'] || 0;
+        if (vB !== vA) return vB - vA;
+        
+        // 3º Critério: Número de Participações
+        const paA = a['_participacoes'] || 0, paB = b['_participacoes'] || 0;
+        if (paB !== paA) return paB - paA;
+        
+        // 4º Critério: Ordem alfabética
+        return a[partKey].localeCompare(b[partKey]);
+    });
+
+    // Cálculo do Ranking Denso (empate = mesma posição)
+    if (appData.rows.length > 0) {
+        let currentRank = 1;
+        appData.rows[0]._rank = 1;
+        for (let i = 1; i < appData.rows.length; i++) {
+            const prev = appData.rows[i - 1], curr = appData.rows[i];
+            const samePts = parseInt(prev[ptsKey]) === parseInt(curr[ptsKey]);
+            const sameVit = (prev['_vitorias'] || 0) === (curr['_vitorias'] || 0);
+            const samePart = prev['_participacoes'] === curr['_participacoes'];
+            
+            if (samePts && sameVit && samePart) curr._rank = currentRank;
+            else { currentRank++; curr._rank = currentRank; }
         }
     }
-    
-    console.log('Jogos encontrados:', Array.from(jogos.values()));
-    
-    // Processar participantes
-    for (let i = headerIndex + 1; i < rows.length; i++) {
-        const row = rows[i];
-        
-        // Pular linhas vazias ou sem participante
-        if (!row[1] || row[1].trim() === '') continue;
-        
-        const participante = {
-            posicao: row[0] || '',
-            nome: row[1] || `Participante ${i}`,
-            pontos: parseInt(row[2]) || 0,
-            palpites: {}
-        };
-        
-        // Extrair palpites
-        jogos.forEach((nomeJogo, colIndex) => {
-            if (row[colIndex]) {
-                participante.palpites[nomeJogo] = extrairPalpite(row[colIndex]);
-            }
-        });
-        
-        participantes.push(participante);
-    }
-    
-    // Ordenar por pontos
-    participantes.sort((a, b) => b.pontos - a.pontos);
-    
-    // Atualizar posições
-    participantes.forEach((p, i) => {
-        p.posicao = i + 1;
-    });
-    
-    appData.participantes = participantes;
-    appData.jogos = Array.from(jogos.values());
-    appData.totalRodadas = jogos.size;
-    
-    console.log('Dados processados:', {
-        participantes: participantes.length,
-        jogos: appData.jogos.length
-    });
 }
 
-// Extrair palpite da célula
-function extrairPalpite(celula) {
-    if (!celula || celula === '-') return null;
-    
-    // Procurar padrão de placar (ex: 2x1, 3x0)
-    const match = celula.match(/(\d+)\s*x\s*(\d+)/);
-    if (match) {
-        return {
-            placar: `${match[1]}x${match[2]}`,
-            time1: parseInt(match[1]),
-            time2: parseInt(match[2])
-        };
-    }
-    
-    // Se não encontrou placar, retorna o texto como está
-    return { placar: celula, time1: null, time2: null };
-}
-
-// Renderizar Classificação
-function renderizarClassificacao() {
-    const tbody = document.getElementById('rankingBody');
-    const top3Container = document.getElementById('top3Container');
-    
-    if (appData.participantes.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="4" style="text-align: center; padding: 2rem;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: var(--amarelo);"></i>
-                    <p>Nenhum dado encontrado na planilha</p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
+// --- Renderização Classificação ---
+function renderClassification(filterText = '') {
+    const tbody = document.querySelector('#table-classificacao tbody');
     tbody.innerHTML = '';
-    top3Container.innerHTML = '';
-    
-    // Top 3
-    const top3 = appData.participantes.slice(0, 3);
-    const medals = ['🥇', '🥈', '🥉'];
-    const classes = ['first', 'second', 'third'];
-    
-    top3.forEach((p, i) => {
-        const card = document.createElement('div');
-        card.className = `top-card ${classes[i]}`;
-        card.style.animationDelay = `${i * 0.1}s`;
-        card.innerHTML = `
-            <div class="top-medal">${medals[i]}</div>
-            <div class="top-nome">${p.nome}</div>
-            <div class="top-pontos">${p.pontos}</div>
-            <div class="top-label">pontos</div>
-        `;
-        top3Container.appendChild(card);
-    });
-    
-    // Tabela completa
-    appData.participantes.forEach((p, index) => {
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
+
+    appData.rows.filter(r => r[partKey].toLowerCase().includes(filterText.toLowerCase())).forEach(row => {
+        let displayRank = row._rank;
+        if (row._rank === 1) displayRank = '🥇';
+        else if (row._rank === 2) displayRank = '🥈';
+        else if (row._rank === 3) displayRank = '🥉';
         const tr = document.createElement('tr');
-        if (index === 0) tr.classList.add('destaque-lider');
-        tr.style.animationDelay = `${index * 0.05}s`;
-        
-        const aproveitamento = appData.totalRodadas > 0 
-            ? ((p.pontos / (appData.totalRodadas * 3)) * 100).toFixed(1) 
-            : 0;
-        
-        tr.innerHTML = `
-            <td class="posicao">${getMedalha(p.posicao)}</td>
-            <td class="participante">${p.nome}</td>
-            <td class="pontos">${p.pontos}</td>
-            <td class="aproveitamento">${aproveitamento}%</td>
-        `;
+        tr.innerHTML = `<td>${displayRank}</td><td class="highlight">${row[partKey]}</td><td><strong>${row[ptsKey]}</strong></td>`;
         tbody.appendChild(tr);
     });
 }
 
-// Obter emoji da medalha
-function getMedalha(posicao) {
-    if (posicao === 1) return '🥇';
-    if (posicao === 2) return '🥈';
-    if (posicao === 3) return '🥉';
-    return posicao;
+// --- Renderização Pódio (Agrupado - mostra todos em caso de empate) ---
+function renderTop3() {
+    const container = document.getElementById('top3-cards');
+    container.innerHTML = '';
+    if (appData.rows.length === 0) return;
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
+
+    const rank1 = appData.rows.filter(r => r._rank === 1);
+    const rank2 = appData.rows.filter(r => r._rank === 2);
+    const rank3 = appData.rows.filter(r => r._rank === 3);
+    
+    const format = (arr) => arr.map(r => r[partKey]).join('<br>');
+    const getPts = (arr) => arr.length > 0 ? arr[0][ptsKey] : '-';
+    const getVit = (arr) => arr.length > 0 ? (arr[0]['_vitorias'] || 0) : 0;
+
+    if (rank2.length > 0) container.innerHTML += `<div class="card-top pos-2"><div class="medal">🥈</div><div class="top-name">${format(rank2)}</div><div class="top-pts">${getPts(rank2)} pts</div><div class="top-vit" style="font-size:0.8rem;color:#666;">${getVit(rank2)} exatos</div></div>`;
+    if (rank1.length > 0) container.innerHTML += `<div class="card-top pos-1"><div class="medal">🥇</div><div class="top-name">${format(rank1)}</div><div class="top-pts">${getPts(rank1)} pts</div><div class="top-vit" style="font-size:0.8rem;color:#666;">${getVit(rank1)} exatos</div></div>`;
+    if (rank3.length > 0) container.innerHTML += `<div class="card-top pos-3"><div class="medal">🥉</div><div class="top-name">${format(rank3)}</div><div class="top-pts">${getPts(rank3)} pts</div><div class="top-vit" style="font-size:0.8rem;color:#666;">${getVit(rank3)} exatos</div></div>`;
 }
 
-// Renderizar Palpites
-function renderizarPalpites() {
-    const thead = document.getElementById('palpitesHead');
-    const tbody = document.getElementById('palpitesBody');
+// --- Renderização Palpites ---
+function renderPredictions() {
+    const thead = document.querySelector('#table-palpites thead');
+    const tbody = document.querySelector('#table-palpites tbody');
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
+    const games = appData.headers.slice(ptsIndex + 1); 
     
-    if (appData.jogos.length === 0) {
-        thead.innerHTML = `
-            <tr>
-                <th colspan="2" style="text-align: center; padding: 2rem;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: var(--amarelo);"></i>
-                    <p>Nenhum jogo encontrado na planilha</p>
-                </th>
-            </tr>
-        `;
-        return;
-    }
+    thead.innerHTML = `<tr><th>Participante</th>${games.map(g => `<th>${g}</th>`).join('')}</tr>`;
+    tbody.innerHTML = appData.rows.map(row => `<tr><td><strong>${row[partKey]}</strong></td>${games.map(g => `<td>${row[g] === '-' || !row[g] ? '' : row[g]}</td>`).join('')}</tr>`).join('');
+}
+
+// --- Performance e Estatísticas Individuais ---
+function searchUserPerformance(name) {
+    const resultDiv = document.getElementById('resultado-desempenho');
+    if (!name.trim()) { resultDiv.classList.add('hidden'); return; }
     
-    // Header
-    let headerHTML = '<tr><th class="participante-col">Participante</th>';
-    appData.jogos.forEach(jogo => {
-        headerHTML += `<th>${jogo}</th>`;
-    });
-    headerHTML += '</tr>';
-    thead.innerHTML = headerHTML;
-    
-    // Body
-    tbody.innerHTML = '';
-    appData.participantes.forEach(p => {
-        const tr = document.createElement('tr');
-        let html = `<td class="participante-col">${p.nome}</td>`;
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const user = appData.rows.find(r => r[partKey].toLowerCase().includes(name.toLowerCase()));
+
+    if (user) {
+        resultDiv.classList.remove('hidden');
+        const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
+        const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
+        const games = appData.headers.slice(ptsIndex + 1);
         
-        appData.jogos.forEach(jogo => {
-            const palpite = p.palpites[jogo];
-            html += `<td>${palpite ? palpite.placar : '-'}</td>`;
+        let disputados = 0;
+        let historicoHTML = '';
+        
+        games.forEach(g => {
+            if(user[g] && user[g] !== '-' && user[g].trim() !== '') { 
+                disputados++; 
+                historicoHTML += `<div class="history-item">
+                    <div><strong>${g}</strong></div>
+                    <div>Palpite: <span style="color:var(--primary);font-weight:600;">${user[g]}</span> ✅</div>
+                </div>`;
+            }
         });
         
-        tr.innerHTML = html;
-        tbody.appendChild(tr);
-    });
-}
-
-// Renderizar Estatísticas
-function renderizarEstatisticas() {
-    if (appData.participantes.length === 0) return;
-    
-    const totalParticipantes = appData.participantes.length;
-    const participantesPontuaram = appData.participantes.filter(p => p.pontos > 0).length;
-    const totalPlacaresExatos = appData.participantes.reduce((acc, p) => {
-        return acc + Object.values(p.palpites).filter(palpite => 
-            palpite && palpite.time1 !== null && palpite.time1 === palpite.time2
-        ).length;
-    }, 0);
-    
-    const totalPalpites = appData.participantes.length * appData.totalRodadas;
-    const palpitesPreenchidos = appData.participantes.reduce((acc, p) => {
-        return acc + Object.keys(p.palpites).length;
-    }, 0);
-    
-    document.getElementById('totalParticipantes').textContent = totalParticipantes;
-    document.getElementById('participantesPontuaram').textContent = participantesPontuaram;
-    document.getElementById('totalRodadas').textContent = appData.totalRodadas;
-    document.getElementById('liderCampeonato').textContent = appData.participantes[0]?.nome.split(' ')[0] || '-';
-    document.getElementById('totalPlacaresExatos').textContent = totalPlacaresExatos;
-    document.getElementById('participacaoTotal').textContent = totalPalpites > 0 
-        ? ((palpitesPreenchidos / totalPalpites) * 100).toFixed(1) + '%' 
-        : '0%';
-    
-    // Gráficos
-    criarGraficos();
-}
-
-// Criar Gráficos
-function criarGraficos() {
-    // Destruir gráficos existentes
-    Object.values(charts).forEach(chart => chart.destroy());
-    
-    // Gráfico de Distribuição
-    const ctxDistribuicao = document.getElementById('chartDistribuicao').getContext('2d');
-    const distribuicaoData = {};
-    
-    appData.participantes.forEach(p => {
-        distribuicaoData[p.pontos] = (distribuicaoData[p.pontos] || 0) + 1;
-    });
-    
-    charts.distribuicao = new Chart(ctxDistribuicao, {
-        type: 'bar',
-        data: {
-            labels: Object.keys(distribuicaoData).sort((a,b) => a-b),
-            datasets: [{
-                label: 'Participantes',
-                data: Object.keys(distribuicaoData).sort((a,b) => a-b).map(k => distribuicaoData[k]),
-                backgroundColor: '#0092DD',
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } }
-            }
-        }
-    });
-    
-    // Gráfico Top 10
-    const ctxTop10 = document.getElementById('chartTop10').getContext('2d');
-    const top10 = appData.participantes.slice(0, 10);
-    
-    charts.top10 = new Chart(ctxTop10, {
-        type: 'doughnut',
-        data: {
-            labels: top10.map(p => p.nome.split(' ')[0]),
-            datasets: [{
-                data: top10.map(p => p.pontos),
-                backgroundColor: [
-                    '#FDC533', '#0092DD', '#2FAC66', '#E94362',
-                    '#954B97', '#005CA9', '#D88BB6', '#C6C6C6',
-                    '#1D1D1B', '#FDC533'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'right',
-                    labels: { boxWidth: 12, font: { size: 10 } }
-                }
-            }
-        }
-    });
-    
-    // Gráfico de Participação
-    const ctxRodadas = document.getElementById('chartRodadas').getContext('2d');
-    const participacaoPorRodada = appData.jogos.map(jogo => {
-        return appData.participantes.filter(p => p.palpites[jogo]).length;
-    });
-    
-    charts.rodadas = new Chart(ctxRodadas, {
-        type: 'line',
-        data: {
-            labels: appData.jogos.map((j, i) => `Jogo ${i + 1}`),
-            datasets: [{
-                label: 'Participantes',
-                data: participacaoPorRodada,
-                borderColor: '#2FAC66',
-                backgroundColor: 'rgba(47, 172, 102, 0.1)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
-    });
-}
-
-// Setup Event Listeners
-function setupEventListeners() {
-    // Navegação entre abas
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-        tab.addEventListener('click', (e) => {
-            const tabId = e.target.closest('.nav-tab').dataset.tab;
-            mudarAba(tabId);
-        });
-    });
-    
-    // Busca na classificação
-    document.getElementById('searchClassificacao').addEventListener('input', (e) => {
-        filtrarClassificacao(e.target.value);
-    });
-    
-    // Busca de desempenho
-    document.getElementById('btnBuscarDesempenho').addEventListener('click', buscarDesempenho);
-    document.getElementById('searchDesempenho').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') buscarDesempenho();
-    });
-    
-    // Toggle tema
-    document.getElementById('themeToggle').addEventListener('click', toggleTema);
-    
-    // Compartilhar
-    document.getElementById('shareBtn').addEventListener('click', compartilhar);
-    
-    // Exportar PNG
-    document.getElementById('exportPng').addEventListener('click', exportarPNG);
-}
-
-// Mudar aba
-function mudarAba(tabId) {
-    document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    
-    document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
-    document.getElementById(tabId).classList.add('active');
-}
-
-// Filtrar classificação
-function filtrarClassificacao(termo) {
-    const rows = document.querySelectorAll('#rankingBody tr');
-    termo = termo.toLowerCase();
-    
-    rows.forEach(row => {
-        const nome = row.querySelector('.participante');
-        if (nome) {
-            const textoNome = nome.textContent.toLowerCase();
-            row.style.display = textoNome.includes(termo) ? '' : 'none';
-        }
-    });
-}
-
-// Buscar desempenho
-function buscarDesempenho() {
-    const nome = document.getElementById('searchDesempenho').value.toLowerCase();
-    if (!nome) {
-        alert('Por favor, digite um nome para buscar');
-        return;
-    }
-    
-    const participante = appData.participantes.find(p => 
-        p.nome.toLowerCase().includes(nome)
-    );
-    
-    if (!participante) {
-        alert('Participante não encontrado! Tente buscar por parte do nome.');
-        return;
-    }
-    
-    // Preencher dados
-    document.getElementById('desempenhoNome').textContent = participante.nome;
-    document.getElementById('desempenhoPosicao').textContent = `${getMedalha(participante.posicao)} ${participante.posicao}º lugar`;
-    document.getElementById('desempenhoPontos').textContent = participante.pontos;
-    document.getElementById('desempenhoJogos').textContent = Object.keys(participante.palpites).length;
-    
-    // Calcular placares exatos
-    const exatos = Object.values(participante.palpites).filter(p => 
-        p && p.time1 !== null && p.time1 === p.time2
-    ).length;
-    document.getElementById('desempenhoExatos').textContent = exatos;
-    
-    // Preencher histórico
-    const tbody = document.getElementById('historicoBody');
-    tbody.innerHTML = '';
-    
-    appData.jogos.forEach(jogo => {
-        const palpite = participante.palpites[jogo];
-        const tr = document.createElement('tr');
-        
-        let pontosJogo = 0;
-        let statusClass = '';
-        let icon = '';
-        
-        if (palpite) {
-            // Simulação - precisaria dos resultados reais para calcular corretamente
-            pontosJogo = Math.floor(Math.random() * 4);
-            statusClass = pontosJogo > 0 ? 'resultado-correto' : 'resultado-errado';
-            icon = pontosJogo === 3 ? '⭐' : pontosJogo > 0 ? '✅' : '❌';
-        }
-        
-        tr.innerHTML = `
-            <td>${jogo}</td>
-            <td>${palpite ? palpite.placar : '-'}</td>
-            <td class="${statusClass}">${palpite ? palpite.placar + ' ' + icon : '-'}</td>
-            <td><strong>${pontosJogo}</strong></td>
-        `;
-        tbody.appendChild(tr);
-    });
-    
-    document.getElementById('desempenhoEmpty').style.display = 'none';
-    document.getElementById('desempenhoResult').style.display = 'block';
-}
-
-// Toggle Tema
-function toggleTema() {
-    document.body.classList.toggle('dark-mode');
-    const btn = document.getElementById('themeToggle');
-    const icon = btn.querySelector('i');
-    
-    if (document.body.classList.contains('dark-mode')) {
-        icon.classList.remove('fa-moon');
-        icon.classList.add('fa-sun');
+        document.getElementById('user-historico').innerHTML = historicoHTML || '<p style="text-align:center;padding:20px;color:#999;">Nenhum palpite registrado ainda.</p>';
+        document.getElementById('user-total-pontos').innerText = user[ptsKey];
+        document.getElementById('user-jogos').innerText = disputados;
+        document.getElementById('user-exatos').innerText = user['_vitorias'] || 0;
     } else {
-        icon.classList.remove('fa-sun');
-        icon.classList.add('fa-moon');
+        resultDiv.classList.add('hidden');
     }
 }
 
-// Compartilhar
-async function compartilhar() {
-    const lider = appData.participantes[0];
-    const texto = `🏆 Bolão TETO-PE - Copa 2026\n\n` +
-                  `🥇 Líder: ${lider?.nome} (${lider?.pontos} pts)\n` +
-                  `👥 Participantes: ${appData.participantes.length}\n` +
-                  `⚽ Jogos: ${appData.totalRodadas}\n\n` +
-                  `Acesse e participe!`;
+// --- Estatísticas Gerais ---
+function updateGlobalStats() {
+    const statsContainer = document.getElementById('geral-stats');
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
+    const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
     
-    if (navigator.share) {
-        try {
-            await navigator.share({
-                title: 'Bolão TETO-PE',
-                text: texto
-            });
-        } catch (err) {
-            console.log('Erro ao compartilhar:', err);
-        }
-    } else {
-        navigator.clipboard.writeText(texto);
-        alert('Classificação copiada para a área de transferência!');
-    }
-}
-
-// Exportar PNG
-async function exportarPNG() {
-    const element = document.getElementById('tableContainer');
-    try {
-        const canvas = await html2canvas(element);
-        const link = document.createElement('a');
-        link.download = 'classificacao-bolao-teto.png';
-        link.href = canvas.toDataURL();
-        link.click();
-    } catch (err) {
-        alert('Erro ao exportar imagem');
-        console.error(err);
-    }
-}
-
-// Mostrar erro
-function mostrarErroCarregamento() {
-    const tbody = document.getElementById('rankingBody');
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="4" style="text-align: center; padding: 2rem;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--rosa); margin-bottom: 1rem;"></i>
-                <p style="font-size: 1.2rem; margin-bottom: 1rem;">Erro ao carregar dados da planilha</p>
-                <button onclick="location.reload()" class="btn-primary">
-                    <i class="fas fa-refresh"></i> Tentar Novamente
-                </button>
-            </td>
-        </tr>
-    `;
+    const total = appData.rows.length;
+    const pontuaram = appData.rows.filter(r => parseInt(r[ptsKey]) > 0).length;
+    const lider = appData.rows[0] ? appData.rows[0][partKey] : '-';
+    const totalExatos = appData.rows.reduce((sum, r) => sum + (r['_vitorias'] || 0), 0);
+    const mediaPontos = total > 0 ? (appData.rows.reduce((sum, r) => sum + parseInt(r[ptsKey] || 0), 0) / total).toFixed(1) : 0;
     
-    const top3Container = document.getElementById('top3Container');
-    top3Container.innerHTML = `
-        <div class="top-card first">
-            <div class="top-medal">⚠️</div>
-            <div class="top-nome">Erro</div>
-            <div class="top-pontos">-</div>
-            <div class="top-label">Sem dados</div>
+    statsContainer.innerHTML = `
+        <div class="stat-card">
+            <h3><i class="fa-solid fa-users"></i> Participantes</h3>
+            <p class="stat-value">${total}</p>
+        </div>
+        <div class="stat-card">
+            <h3><i class="fa-solid fa-star"></i> Já Pontuaram</h3>
+            <p class="stat-value">${pontuaram}</p>
+        </div>
+        <div class="stat-card">
+            <h3><i class="fa-solid fa-futbol"></i> Rodadas</h3>
+            <p class="stat-value">${appData.headers.slice(ptsIndex + 1).length}</p>
+        </div>
+        <div class="stat-card">
+            <h3><i class="fa-solid fa-crown"></i> Líder Atual</h3>
+            <p class="stat-value" style="font-size: 1.2rem;">${lider}</p>
+        </div>
+        <div class="stat-card">
+            <h3><i class="fa-solid fa-bullseye"></i> Total de Exatos</h3>
+            <p class="stat-value">${totalExatos}</p>
+        </div>
+        <div class="stat-card">
+            <h3><i class="fa-solid fa-chart-line"></i> Média de Pontos</h3>
+            <p class="stat-value">${mediaPontos}</p>
         </div>
     `;
 }
 
-// Loading
-function showLoading(show) {
-    const loading = document.getElementById('loading');
-    if (show) {
-        loading.classList.remove('hidden');
-    } else {
-        loading.classList.add('hidden');
-    }
+// --- Gráficos ---
+function renderCharts() {
+    if (appData.rows.length === 0) return;
+    const themeDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const txt = themeDark ? '#FFF' : '#1D1D1B';
+    const ptsK = appData.headers.find(h => h.toLowerCase().includes('ponto'));
+    const partK = appData.headers.find(h => h.toLowerCase().includes('participante'));
+
+    if(charts.pontos) charts.pontos.destroy();
+    if(charts.top10) charts.top10.destroy();
+
+    // Distribuição de Pontos
+    const counts = {};
+    appData.rows.forEach(r => { 
+        const p = parseInt(r[ptsK]) || 0; 
+        counts[p] = (counts[p] || 0) + 1; 
+    });
+
+    charts.pontos = new Chart(document.getElementById('pontosChart').getContext('2d'), {
+        type: 'bar',
+        data: { 
+            labels: Object.keys(counts).sort((a,b) => a-b).map(k => `${k} pts`), 
+            datasets: [{ 
+                label: 'Quantidade de Participantes', 
+                data: Object.keys(counts).sort((a,b) => a-b).map(k => counts[k]), 
+                backgroundColor: '#0092DD', 
+                borderRadius: 5 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            plugins: { 
+                legend: { labels: { color: txt } } 
+            }, 
+            scales: { 
+                x: { ticks: { color: txt } }, 
+                y: { ticks: { color: txt }, beginAtZero: true } 
+            } 
+        }
+    });
+
+    // Top 10 Participantes
+    const top10 = appData.rows.slice(0, 10);
+    charts.top10 = new Chart(document.getElementById('top10Chart').getContext('2d'), {
+        type: 'doughnut',
+        data: { 
+            labels: top10.map(r => r[partK]), 
+            datasets: [{ 
+                data: top10.map(r => parseInt(r[ptsK]) || 0), 
+                backgroundColor: ['#0092DD', '#FDC533', '#2FAC66', '#E94362', '#005CA9', '#D88BB6', '#954B97', '#C6C6C6', '#1D1D1B', '#333333'] 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            plugins: { 
+                legend: { 
+                    position: 'right', 
+                    labels: { color: txt, font: { size: 11 } } 
+                } 
+            } 
+        }
+    });
 }
 
-// Auto-refresh a cada 5 minutos
-setInterval(() => {
-    console.log('Atualizando dados automaticamente...');
-    initApp();
-}, 300000);
+// --- Event Listeners ---
+function setupEventListeners() {
+    document.getElementById('search-classificacao').addEventListener('input', (e) => renderClassification(e.target.value));
+    document.getElementById('search-desempenho').addEventListener('input', (e) => searchUserPerformance(e.target.value));
+    
+    document.getElementById('btn-export').addEventListener('click', () => {
+        html2canvas(document.getElementById('tabela-export-area'), { backgroundColor: null }).then(c => {
+            const l = document.createElement('a'); 
+            l.download = 'classificacao.png'; 
+            l.href = c.toDataURL(); 
+            l.click();
+        });
+    });
+    
+    document.getElementById('btn-share').addEventListener('click', () => {
+        if (navigator.share) {
+            navigator.share({ 
+                title: 'Bolão TETO-PE', 
+                text: 'Confira a classificação do nosso bolão!',
+                url: window.location.href 
+            });
+        } else {
+            alert('Link: ' + window.location.href);
+        }
+    });
+}
