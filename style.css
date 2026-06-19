@@ -558,3 +558,167 @@ td.highlight {
         padding: 15px;
     }
 }
+/* ============================================
+   SEÇÃO DE DETALHES DO DESEMPATE
+   ============================================ */
+.desempate-container {
+    margin: 2rem 0 3rem 0;
+    animation: fadeIn 0.6s ease;
+}
+
+.desempate-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.desempate-header h3 {
+    font-family: 'Fredoka', sans-serif;
+    color: var(--primary);
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+}
+
+.desempate-header h3 i {
+    margin-right: 8px;
+}
+
+.desempate-subtitle {
+    color: var(--gray);
+    font-size: 0.95rem;
+}
+
+.desempate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.desempate-card {
+    background: var(--card-bg);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.desempate-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+
+.desempate-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.desempate-medal {
+    font-size: 2.2rem;
+}
+
+.desempate-card-header h4 {
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.2rem;
+    color: var(--text-color);
+    margin-bottom: 4px;
+}
+
+.desempate-nomes {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--border-color);
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.desempate-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.desempate-stat {
+    background: var(--hover-bg);
+    padding: 10px 8px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.desempate-stat i {
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.desempate-stat .stat-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.desempate-stat .stat-num {
+    display: block;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.desempate-criterio {
+    background: var(--hover-bg);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    text-align: center;
+    border-left: 3px solid var(--green);
+}
+
+/* Badges de Status */
+.badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge.definido {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge.empate {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge.critico2 {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.badge.critico3 {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+[data-theme="dark"] .badge.definido { background: #1e4620; color: #a3d9a5; }
+[data-theme="dark"] .badge.empate { background: #4a3f1a; color: #fde68a; }
+[data-theme="dark"] .badge.critico2 { background: #1e3a4a; color: #a5d8e8; }
+[data-theme="dark"] .badge.critico3 { background: #4a1e24; color: #f5a5b0; }
+
+@media (max-width: 768px) {
+    .desempate-stats {
+        grid-template-columns: 1fr;
+    }
+}
