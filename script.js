@@ -119,6 +119,7 @@ async function fetchData() {
         renderDesempateDetalhes();
         renderPredictions();
         updateGlobalStats();
+        popularSelectParticipantes(); // ← ADICIONE ESTA LINHA
     } catch (error) {
         console.error("Erro ao carregar dados:", error);
     }
@@ -384,6 +385,11 @@ function searchUserPerformance(name) {
 
     if (user) {
         resultDiv.classList.remove('hidden');
+        
+        // Sincroniza o dropdown com o nome encontrado
+        const select = document.getElementById('select-participante');
+        if (select) select.value = user[partKey];
+        
         const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
         const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
         const gamesHeaders = appData.headers.slice(ptsIndex + 1);
@@ -402,7 +408,7 @@ function searchUserPerformance(name) {
                 const ehExato = resultadoReal && palpiteNormalizado === resultadoReal;
                 
                 const icone = ehExato 
-                    ? '🎯 <span style="color:var(--yellow);font-weight:bold;">EXATO!</span>' 
+                    ? ' <span style="color:var(--yellow);font-weight:bold;">EXATO!</span>' 
                     : '✅';
                 const corPalpite = ehExato ? 'var(--green)' : 'var(--primary)';
                 
@@ -563,6 +569,19 @@ function renderCharts() {
 function setupEventListeners() {
     document.getElementById('search-classificacao').addEventListener('input', (e) => renderClassification(e.target.value));
     document.getElementById('search-desempenho').addEventListener('input', (e) => searchUserPerformance(e.target.value));
+    
+    // NOVO: Evento do dropdown
+    document.getElementById('select-participante').addEventListener('change', (e) => {
+        const nomeSelecionado = e.target.value;
+        if (nomeSelecionado) {
+            searchUserPerformance(nomeSelecionado);
+            // Opcional: sincroniza o campo de texto
+            document.getElementById('search-desempenho').value = nomeSelecionado;
+        } else {
+            document.getElementById('resultado-desempenho').classList.add('hidden');
+            document.getElementById('search-desempenho').value = '';
+        }
+    });
     
     document.getElementById('btn-export').addEventListener('click', () => {
         html2canvas(document.getElementById('tabela-export-area'), { backgroundColor: null }).then(c => {
