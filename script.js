@@ -352,6 +352,24 @@ function searchUserPerformance(name) {
         resultDiv.classList.add('hidden');
     }
 }
+function calcularPlacaresExatos(usuario) {
+    const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
+    const games = appData.headers.slice(ptsIndex + 1);
+    let exatos = 0;
+    
+    games.forEach(game => {
+        const palpite = usuario[game];
+        // Aqui você precisaria ter os resultados reais em outra coluna
+        // Ex: se a planilha tiver colunas como "Jogo1_Resultado", "Jogo2_Resultado", etc.
+        const resultadoReal = usuario[game + '_Resultado']; // ou como estiver na planilha
+        
+        if (palpite && resultadoReal && palpite === resultadoReal) {
+            exatos++;
+        }
+    });
+    
+    return exatos;
+}
 
 // --- Estatísticas Gerais ---
 function updateGlobalStats() {
