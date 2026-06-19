@@ -41,14 +41,37 @@ function calcularPlacaresExatos(usuario) {
     const gamesHeaders = appData.headers.slice(ptsIndex + 1);
     let exatos = 0;
     
-    gamesHeaders.forEach(header => {
-        const resultadoReal = extrairResultadoReal(header);
-        const palpiteUsuario = normalizarPalpite(usuario[header]);
+gamesHeaders.forEach(header => {
+    const palpite = user[header];
+    if (palpite && palpite !== '-' && palpite.trim() !== '') { 
+        disputados++; 
         
-        if (resultadoReal && palpiteUsuario && resultadoReal === palpiteUsuario) {
-            exatos++;
-        }
-    });
+        const resultadoReal = extrairResultadoReal(header);
+        const palpiteNormalizado = normalizarPalpite(palpite);
+        const ehExato = resultadoReal && palpiteNormalizado === resultadoReal;
+        
+        // --- AQUI ESTÁ A MUDANÇA ---
+        const icone = ehExato 
+            ? '<span style="color:var(--yellow); font-weight:bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">🎯 EXATO!</span>' 
+            : '<span style="color: #E94362; font-weight:bold; font-size: 1.2rem;">❌</span>'; // X vermelho
+
+        const corPalpite = ehExato ? 'var(--green)' : 'var(--text-color)';
+        
+        // Fundo verde claro para exato, fundo levemente avermelhado para erro
+        const bgStyle = ehExato 
+            ? 'background: rgba(47, 172, 102, 0.1); border-left: 4px solid var(--green);' 
+            : 'background: rgba(233, 67, 98, 0.05); border-left: 4px solid var(--border-color);';
+        // ---------------------------
+
+        historicoHTML += `<div class="history-item" style="${bgStyle}">
+            <div><strong>${header}</strong></div>
+            <div>
+                <span style="color:${corPalpite}; font-weight:600;">${palpite}</span> 
+                ${icone}
+            </div>
+        </div>`;
+    }
+});;
     
     return exatos;
 }
