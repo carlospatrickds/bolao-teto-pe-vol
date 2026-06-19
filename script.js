@@ -374,6 +374,7 @@ function renderPredictions() {
 // ============================================
 // DESEMPENHO INDIVIDUAL DO USUÁRIO
 // ============================================
+
 function searchUserPerformance(name) {
     const resultDiv = document.getElementById('resultado-desempenho');
     if (!name.trim()) { resultDiv.classList.add('hidden'); return; }
@@ -422,6 +423,34 @@ function searchUserPerformance(name) {
     } else {
         resultDiv.classList.add('hidden');
     }
+}
+
+// ============================================
+// POPULAR DROPDOWN DE PARTICIPANTES
+// ============================================
+function popularSelectParticipantes() {
+    const select = document.getElementById('select-participante');
+    if (!select) return;
+    
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
+    
+    // Mantém a primeira opção (placeholder)
+    select.innerHTML = '<option value="">👇 Selecione seu nome na lista</option>';
+    
+    // Ordena alfabeticamente para facilitar a busca
+    const participantesOrdenados = [...appData.rows].sort((a, b) => 
+        a[partKey].localeCompare(b[partKey])
+    );
+    
+    participantesOrdenados.forEach(row => {
+        const nome = row[partKey];
+        const pontos = row[ptsKey];
+        const option = document.createElement('option');
+        option.value = nome;
+        option.textContent = `${nome} — ${pontos} pts`;
+        select.appendChild(option);
+    });
 }
 
 // ============================================
