@@ -35,43 +35,20 @@ function normalizarPalpite(palpite) {
     return match ? match[1] : null;
 }
 
-// Calcula placares exatos comparando com o cabeçalho
+// ✅ FUNÇÃO CORRIGIDA: Apenas calcula o número de exatos (SEM HTML)
 function calcularPlacaresExatos(usuario) {
     const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
     const gamesHeaders = appData.headers.slice(ptsIndex + 1);
     let exatos = 0;
     
-gamesHeaders.forEach(header => {
-    const palpite = user[header];
-    if (palpite && palpite !== '-' && palpite.trim() !== '') { 
-        disputados++; 
-        
+    gamesHeaders.forEach(header => {
         const resultadoReal = extrairResultadoReal(header);
-        const palpiteNormalizado = normalizarPalpite(palpite);
-        const ehExato = resultadoReal && palpiteNormalizado === resultadoReal;
+        const palpiteUsuario = normalizarPalpite(usuario[header]);
         
-        // --- AQUI ESTÁ A MUDANÇA ---
-        const icone = ehExato 
-            ? '<span style="color:var(--yellow); font-weight:bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">🎯 EXATO!</span>' 
-            : '<span style="color: #E94362; font-weight:bold; font-size: 1.2rem;">❌</span>'; // X vermelho
-
-        const corPalpite = ehExato ? 'var(--green)' : 'var(--text-color)';
-        
-        // Fundo verde claro para exato, fundo levemente avermelhado para erro
-        const bgStyle = ehExato 
-            ? 'background: rgba(47, 172, 102, 0.1); border-left: 4px solid var(--green);' 
-            : 'background: rgba(233, 67, 98, 0.05); border-left: 4px solid var(--border-color);';
-        // ---------------------------
-
-        historicoHTML += `<div class="history-item" style="${bgStyle}">
-            <div><strong>${header}</strong></div>
-            <div>
-                <span style="color:${corPalpite}; font-weight:600;">${palpite}</span> 
-                ${icone}
-            </div>
-        </div>`;
-    }
-});;
+        if (resultadoReal && palpiteUsuario && resultadoReal === palpiteUsuario) {
+            exatos++;
+        }
+    });
     
     return exatos;
 }
@@ -142,7 +119,7 @@ async function fetchData() {
         renderDesempateDetalhes();
         renderPredictions();
         updateGlobalStats();
-        popularSelectParticipantes(); // ← ADICIONE ESTA LINHA
+        popularSelectParticipantes();
     } catch (error) {
         console.error("Erro ao carregar dados:", error);
     }
@@ -197,19 +174,15 @@ function parseCSV(csv) {
 
     // Ordenação com Critérios de Desempate
     appData.rows.sort((a, b) => {
-        // 1º Critério: Pontuação Total
         const pA = parseInt(a[ptsKey]) || 0, pB = parseInt(b[ptsKey]) || 0;
         if (pB !== pA) return pB - pA;
         
-        // 2º Critério: Placares Exatos
         const vA = a['_vitorias'] || 0, vB = b['_vitorias'] || 0;
         if (vB !== vA) return vB - vA;
         
-        // 3º Critério: Número de Participações
         const paA = a['_participacoes'] || 0, paB = b['_participacoes'] || 0;
         if (paB !== paA) return paB - paA;
         
-        // 4º Critério: Ordem alfabética
         return a[partKey].localeCompare(b[partKey]);
     });
 
@@ -242,7 +215,7 @@ function renderClassification(filterText = '') {
         let displayRank = row._rank;
         if (row._rank === 1) displayRank = '🥇';
         else if (row._rank === 2) displayRank = '🥈';
-        else if (row._rank === 3) displayRank = '';
+        else if (row._rank === 3) displayRank = '🥉';
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${displayRank}</td><td class="highlight">${row[partKey]}</td><td><strong>${row[ptsKey]}</strong></td>`;
         tbody.appendChild(tr);
@@ -331,7 +304,7 @@ function renderDesempateDetalhes() {
                     statusBadge = `<span class="badge critico3">🎯 Desempate nas participações</span>`;
                 } else {
                     criterioDefinidor = '✅ Definido por ordem alfabética';
-                    statusBadge = `<span class="badge definido"> Posição definida</span>`;
+                    statusBadge = `<span class="badge definido">🏆 Posição definida</span>`;
                 }
             } else {
                 criterioDefinidor = '✅ Único nesta posição';
@@ -397,8 +370,8 @@ function renderPredictions() {
 
 // ============================================
 // DESEMPENHO INDIVIDUAL DO USUÁRIO
+// ✅ CORRIGIDO: Agora usa ❌ para palpites errados
 // ============================================
-
 function searchUserPerformance(name) {
     const resultDiv = document.getElementById('resultado-desempenho');
     if (!name.trim()) { resultDiv.classList.add('hidden'); return; }
@@ -409,7 +382,6 @@ function searchUserPerformance(name) {
     if (user) {
         resultDiv.classList.remove('hidden');
         
-        // Sincroniza o dropdown com o nome encontrado
         const select = document.getElementById('select-participante');
         if (select) select.value = user[partKey];
         
@@ -430,15 +402,21 @@ function searchUserPerformance(name) {
                 const palpiteNormalizado = normalizarPalpite(palpite);
                 const ehExato = resultadoReal && palpiteNormalizado === resultadoReal;
                 
+                // ✅ AQUI ESTÁ A MUDANÇA: ❌ vermelho para erro, 🎯 dourado para exato
                 const icone = ehExato 
-                    ? ' <span style="color:var(--yellow);font-weight:bold;">EXATO!</span>' 
-                    : '✅';
-                const corPalpite = ehExato ? 'var(--green)' : 'var(--primary)';
+                    ? '<span style="color:var(--yellow); font-weight:bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">🎯 EXATO!</span>' 
+                    : '<span style="color: #E94362; font-weight:bold; font-size: 1.2rem;">❌</span>';
                 
-                historicoHTML += `<div class="history-item" style="${ehExato ? 'background:#d4edda;border-left:4px solid var(--green);' : ''}">
+                const corPalpite = ehExato ? 'var(--green)' : 'var(--text-color)';
+                
+                const bgStyle = ehExato 
+                    ? 'background: rgba(47, 172, 102, 0.1); border-left: 4px solid var(--green);' 
+                    : 'background: rgba(233, 67, 98, 0.05); border-left: 4px solid var(--border-color);';
+                
+                historicoHTML += `<div class="history-item" style="${bgStyle}">
                     <div><strong>${header}</strong></div>
                     <div>
-                        <span style="color:${corPalpite};font-weight:600;">${palpite}</span> 
+                        <span style="color:${corPalpite}; font-weight:600;">${palpite}</span> 
                         ${icone}
                     </div>
                 </div>`;
@@ -464,10 +442,8 @@ function popularSelectParticipantes() {
     const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
     const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
     
-    // Mantém a primeira opção (placeholder)
     select.innerHTML = '<option value="">👇 Selecione seu nome na lista</option>';
     
-    // Ordena alfabeticamente para facilitar a busca
     const participantesOrdenados = [...appData.rows].sort((a, b) => 
         a[partKey].localeCompare(b[partKey])
     );
@@ -538,7 +514,6 @@ function renderCharts() {
     if (charts.pontos) charts.pontos.destroy();
     if (charts.top10) charts.top10.destroy();
 
-    // Distribuição de Pontos
     const counts = {};
     appData.rows.forEach(r => { 
         const p = parseInt(r[ptsK]) || 0; 
@@ -566,7 +541,6 @@ function renderCharts() {
         }
     });
 
-    // Top 10 Participantes
     const top10 = appData.rows.slice(0, 10);
     charts.top10 = new Chart(document.getElementById('top10Chart').getContext('2d'), {
         type: 'doughnut',
@@ -593,12 +567,10 @@ function setupEventListeners() {
     document.getElementById('search-classificacao').addEventListener('input', (e) => renderClassification(e.target.value));
     document.getElementById('search-desempenho').addEventListener('input', (e) => searchUserPerformance(e.target.value));
     
-    // NOVO: Evento do dropdown
     document.getElementById('select-participante').addEventListener('change', (e) => {
         const nomeSelecionado = e.target.value;
         if (nomeSelecionado) {
             searchUserPerformance(nomeSelecionado);
-            // Opcional: sincroniza o campo de texto
             document.getElementById('search-desempenho').value = nomeSelecionado;
         } else {
             document.getElementById('resultado-desempenho').classList.add('hidden');
