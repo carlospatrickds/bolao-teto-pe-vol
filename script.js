@@ -1,6 +1,6 @@
 /**
  * BOLÃO TETO-PE - Script Principal
- * Lógica de processamento de dados e renderização da interface
+ * Versão corrigida - Usa pontos da planilha
  */
 
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTTqRYCxqqTeJLzCpTWOy9CAN_Dh8pWyQquoWLDeCtT8ThDgt4kqi40F5tEXnbAwEVqnzC01MZbOHqT/pub?gid=1254969741&single=true&output=csv';
@@ -29,100 +29,7 @@ function normalizarPalpite(palpite) {
     return match ? match[1] : null;
 }
 
-// ✅ NOVA FUNÇÃO: Extrai times e placar de um palpite
-// Ex: "Uruguai 3x0 Arábia Saudita" → {timeCasa: "Uruguai", golsCasa: 3, golsFora: 0, timeFora: "Arábia Saudita"}
-function parsePalpite(palpite) {
-    if (!palpite || palpite === '-') return null;
-    
-    // Tenta extrair: TimeA XxY TimeB
-    const regex = /(.+?)\s+(\d+)x(\d+)\s+(.+)/i;
-    const match = palpite.match(regex);
-    
-    if (match) {
-        return {
-            timeCasa: match[1].trim(),
-            golsCasa: parseInt(match[2]),
-            golsFora: parseInt(match[3]),
-            timeFora: match[4].trim()
-        };
-    }
-    return null;
-}
-
-// ✅ NOVA FUNÇÃO: Determina o resultado (casa/empate/fora)
-function determinarResultado(golsCasa, golsFora) {
-    if (golsCasa > golsFora) return 'casa';
-    if (golsCasa < golsFora) return 'fora';
-    return 'empate';
-}
-
-// ✅ NOVA FUNÇÃO: Calcula pontos de um único palpite
-function calcularPontosPalpite(palpiteUsuario, resultadoReal) {
-    const palpiteParseado = parsePalpite(palpiteUsuario);
-    const realParseado = parsePalpite(resultadoReal);
-    
-    if (!palpiteParseado || !realParseado) return 0;
-    
-    let pontos = 0;
-    let detalhes = [];
-    
-    // Verifica se acertou o placar exato
-    if (palpiteParseado.golsCasa === realParseado.golsCasa && 
-        palpiteParseado.golsFora === realParseado.golsFora) {
-        pontos += 3;
-        detalhes.push('🎯 Placar exato (+3 pts)');
-    } else {
-        // Verifica se acertou o resultado (casa/empate/fora)
-        const resultadoPalpite = determinarResultado(palpiteParseado.golsCasa, palpiteParseado.golsFora);
-        const resultadoRealFinal = determinarResultado(realParseado.golsCasa, realParseado.golsFora);
-        
-        if (resultadoPalpite === resultadoRealFinal) {
-            pontos += 1;
-            detalhes.push('✅ Acertou o vencedor (+1 pt)');
-        } else {
-            detalhes.push('❌ Errou o resultado');
-        }
-    }
-    
-    return { pontos, detalhes };
-}
-
-// ✅ NOVA FUNÇÃO: Calcula total de pontos e exatos de um usuário
-function calcularPontuacaoCompleta(usuario) {
-    const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
-    const gamesHeaders = appData.headers.slice(ptsIndex + 1);
-    
-    let totalPontos = 0;
-    let totalExatos = 0;
-    let jogosDisputados = 0;
-    const detalhesPorJogo = {};
-    
-    gamesHeaders.forEach(header => {
-        const palpite = usuario[header];
-        if (palpite && palpite !== '-' && palpite.trim() !== '') {
-            jogosDisputados++;
-            
-            const resultadoReal = extrairResultadoReal(header);
-            // Reconstrói o cabeçalho completo para comparação
-            const resultadoCompleto = header; 
-            
-            const { pontos, detalhes } = calcularPontosPalpite(palpite, resultadoCompleto);
-            
-            totalPontos += pontos;
-            detalhesPorJogo[header] = { palpite, pontos, detalhes };
-            
-            if (pontos >= 3) totalExatos++;
-        }
-    });
-    
-    return {
-        totalPontos,
-        totalExatos,
-        jogosDisputados,
-        detalhesPorJogo
-    };
-}
-
+// ✅ Calcula se o palpite foi exato (compara com cabeçalho)
 function calcularPlacaresExatos(usuario) {
     const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
     const gamesHeaders = appData.headers.slice(ptsIndex + 1);
@@ -138,6 +45,52 @@ function calcularPlacaresExatos(usuario) {
     });
     
     return exatos;
+}
+
+// ✅ Verifica se acertou o vencedor (para mostrar no histórico)
+function verificarAcertoVencedor(palpite, resultadoReal) {
+    const palpiteParse = parsePalpite(palpite);
+    const realParse = parsePalpite(resultadoReal);
+    
+    if (!palpiteParse || !realParse) return { acertou: false, tipo: 'erro' };
+    
+    // Placar exato
+    if (palpiteParse.golsCasa === realParse.golsCasa && 
+        palpiteParse.golsFora === realParse.golsFora) {
+        return { acertou: true, tipo: 'exato', pontos: 3 };
+    }
+    
+    // Acertou o resultado (casa/empate/fora)
+    const resultadoPalpite = determinarResultado(palpiteParse.golsCasa, palpiteParse.golsFora);
+    const resultadoRealFinal = determinarResultado(realParse.golsCasa, realParse.golsFora);
+    
+    if (resultadoPalpite === resultadoRealFinal) {
+        return { acertou: true, tipo: 'vencedor', pontos: 1 };
+    }
+    
+    return { acertou: false, tipo: 'erro', pontos: 0 };
+}
+
+function parsePalpite(palpite) {
+    if (!palpite || palpite === '-') return null;
+    const regex = /(.+?)\s+(\d+)x(\d+)\s+(.+)/i;
+    const match = palpite.match(regex);
+    
+    if (match) {
+        return {
+            timeCasa: match[1].trim(),
+            golsCasa: parseInt(match[2]),
+            golsFora: parseInt(match[3]),
+            timeFora: match[4].trim()
+        };
+    }
+    return null;
+}
+
+function determinarResultado(golsCasa, golsFora) {
+    if (golsCasa > golsFora) return 'casa';
+    if (golsCasa < golsFora) return 'fora';
+    return 'empate';
 }
 
 // ============================================
@@ -234,11 +187,8 @@ function parseCSV(csv) {
         });
         rowData['_participacoes'] = participacoes;
         
-        // ✅ CALCULA PONTOS AUTOMATICAMENTE!
-        const pontuacao = calcularPontuacaoCompleta(rowData);
-        rowData['_pontosCalculados'] = pontuacao.totalPontos;
-        rowData['_vitorias'] = pontuacao.totalExatos;
-        rowData['_detalhesPontuacao'] = pontuacao.detalhesPorJogo;
+        // ✅ CALCULA APENAS OS EXATOS (para critério de desempate)
+        rowData['_vitorias'] = calcularPlacaresExatos(rowData);
         
         return rowData;
     });
@@ -250,9 +200,9 @@ function parseCSV(csv) {
         return !isNaN(parseInt(pontosRaiz));
     });
 
-    // Ordenação com Critérios de Desempate (usa pontos calculados)
+    // ✅ ORDENA USANDO OS PONTOS DA PLANILHA
     appData.rows.sort((a, b) => {
-        const pA = a['_pontosCalculados'] || 0, pB = b['_pontosCalculados'] || 0;
+        const pA = parseInt(a[ptsKey]) || 0, pB = parseInt(b[ptsKey]) || 0;
         if (pB !== pA) return pB - pA;
         
         const vA = a['_vitorias'] || 0, vB = b['_vitorias'] || 0;
@@ -264,12 +214,13 @@ function parseCSV(csv) {
         return a[partKey].localeCompare(b[partKey]);
     });
 
+    // Ranking denso
     if (appData.rows.length > 0) {
         let currentRank = 1;
         appData.rows[0]._rank = 1;
         for (let i = 1; i < appData.rows.length; i++) {
             const prev = appData.rows[i - 1], curr = appData.rows[i];
-            const samePts = (prev['_pontosCalculados'] || 0) === (curr['_pontosCalculados'] || 0);
+            const samePts = parseInt(prev[ptsKey]) === parseInt(curr[ptsKey]);
             const sameVit = (prev['_vitorias'] || 0) === (curr['_vitorias'] || 0);
             const samePart = prev['_participacoes'] === curr['_participacoes'];
             
@@ -283,6 +234,7 @@ function renderClassification(filterText = '') {
     const tbody = document.querySelector('#table-classificacao tbody');
     tbody.innerHTML = '';
     const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
 
     appData.rows.filter(r => r[partKey].toLowerCase().includes(filterText.toLowerCase())).forEach(row => {
         let displayRank = row._rank;
@@ -290,8 +242,8 @@ function renderClassification(filterText = '') {
         else if (row._rank === 2) displayRank = '🥈';
         else if (row._rank === 3) displayRank = '🥉';
         
-        // ✅ USA PONTOS CALCULADOS
-        const pontos = row['_pontosCalculados'] || 0;
+        // ✅ USA PONTOS DA PLANILHA
+        const pontos = row[ptsKey];
         
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${displayRank}</td><td class="highlight">${row[partKey]}</td><td><strong>${pontos}</strong></td>`;
@@ -304,13 +256,14 @@ function renderTop3() {
     container.innerHTML = '';
     if (appData.rows.length === 0) return;
     const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
 
     const rank1 = appData.rows.filter(r => r._rank === 1);
     const rank2 = appData.rows.filter(r => r._rank === 2);
     const rank3 = appData.rows.filter(r => r._rank === 3);
     
     const format = (arr) => arr.map(r => r[partKey]).join('<br>');
-    const getPts = (arr) => arr.length > 0 ? (arr[0]['_pontosCalculados'] || 0) : '-';
+    const getPts = (arr) => arr.length > 0 ? arr[0][ptsKey] : '-';
     const getVit = (arr) => arr.length > 0 ? (arr[0]['_vitorias'] || 0) : 0;
 
     if (rank2.length > 0) container.innerHTML += `<div class="card-top pos-2"><div class="medal">🥈</div><div class="top-name">${format(rank2)}</div><div class="top-pts">${getPts(rank2)} pts</div><div class="top-vit" style="font-size:0.8rem;color:#666;">${getVit(rank2)} exatos</div></div>`;
@@ -325,6 +278,7 @@ function renderDesempateDetalhes() {
     if (appData.rows.length === 0) return;
     
     const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
     
     const ranks = [1, 2, 3];
     const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
@@ -344,7 +298,7 @@ function renderDesempateDetalhes() {
         if (grupo.length === 0) return;
         
         const nomes = grupo.map(r => r[partKey]).join(', ');
-        const pontos = grupo[0]['_pontosCalculados'] || 0;
+        const pontos = grupo[0][ptsKey];
         const exatos = grupo[0]['_vitorias'] || 0;
         const participacoes = grupo[0]['_participacoes'] || 0;
         const empatou = grupo.length > 1;
@@ -358,7 +312,7 @@ function renderDesempateDetalhes() {
         } else {
             const proximo = appData.rows.find(r => r._rank === rank + 1);
             if (proximo) {
-                const ptsProx = proximo['_pontosCalculados'] || 0;
+                const ptsProx = parseInt(proximo[ptsKey]);
                 const exatosProx = proximo['_vitorias'] || 0;
                 const partProx = proximo['_participacoes'] || 0;
                 
@@ -434,12 +388,13 @@ function renderPredictions() {
     tbody.innerHTML = appData.rows.map(row => `<tr><td><strong>${row[partKey]}</strong></td>${games.map(g => `<td>${row[g] === '-' || !row[g] ? '' : row[g]}</td>`).join('')}</tr>`).join('');
 }
 
-// ✅ ATUALIZADO: Mostra detalhes completos da pontuação
+// ✅ MOSTRA VISUALMENTE OS ACERTOS/ERROS (sem alterar pontos)
 function searchUserPerformance(name) {
     const resultDiv = document.getElementById('resultado-desempenho');
     if (!name.trim()) { resultDiv.classList.add('hidden'); return; }
     
     const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
     const user = appData.rows.find(r => r[partKey].toLowerCase().includes(name.toLowerCase()));
 
     if (user) {
@@ -451,51 +406,50 @@ function searchUserPerformance(name) {
         const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
         const gamesHeaders = appData.headers.slice(ptsIndex + 1);
         
-        // ✅ USA CÁLCULO AUTOMÁTICO
-        const pontuacao = calcularPontuacaoCompleta(user);
-        
+        let disputados = 0;
+        let exatos = user['_vitorias'] || 0;
         let historicoHTML = '';
         
         gamesHeaders.forEach(header => {
             const palpite = user[header];
             if (palpite && palpite !== '-' && palpite.trim() !== '') { 
+                disputados++; 
+                
                 const resultadoReal = extrairResultadoReal(header);
                 const palpiteNormalizado = normalizarPalpite(palpite);
                 const ehExato = resultadoReal && palpiteNormalizado === resultadoReal;
                 
-                // ✅ MOSTRA DETALHES DA PONTUAÇÃO
-                const detalhes = pontuacao.detalhesPorJogo[header] || { pontos: 0, detalhes: [] };
-                const pontosGanhos = detalhes.pontos;
+                // ✅ Verifica se acertou o vencedor (para visualização)
+                const acertoVencedor = verificarAcertoVencedor(palpite, header);
                 
-                const icone = pontosGanhos >= 3 
-                    ? '<span style="color:var(--yellow); font-weight:bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">🎯 EXATO!</span>' 
-                    : pontosGanhos === 1 
-                        ? '<span style="color:var(--green); font-weight:bold;">✅</span>'
-                        : '<span style="color: #E94362; font-weight:bold; font-size: 1.2rem;">❌</span>';
+                let icone, corPalpite, bgStyle, textoExplicacao;
                 
-                const corPalpite = pontosGanhos >= 3 ? 'var(--green)' : pontosGanhos === 1 ? 'var(--primary)' : 'var(--text-color)';
-                
-                const bgStyle = pontosGanhos >= 3 
-                    ? 'background: rgba(47, 172, 102, 0.15); border-left: 4px solid var(--green);' 
-                    : pontosGanhos === 1
-                        ? 'background: rgba(0, 146, 221, 0.05); border-left: 4px solid var(--primary);'
-                        : 'background: rgba(233, 67, 98, 0.05); border-left: 4px solid var(--border-color);';
-                
-                // ✅ MOSTRA QUANTOS PONTOS GANHOU
-                const pontosDisplay = pontosGanhos > 0 
-                    ? `<span style="font-size:0.85rem; color:var(--gray); margin-left:8px;">(+${pontosGanhos} ${pontosGanhos === 1 ? 'pt' : 'pts'})</span>` 
-                    : '';
+                if (ehExato) {
+                    icone = '<span style="color:var(--yellow); font-weight:bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">🎯 EXATO!</span>';
+                    corPalpite = 'var(--green)';
+                    bgStyle = 'background: rgba(47, 172, 102, 0.15); border-left: 4px solid var(--green);';
+                    textoExplicacao = 'Placar exato!';
+                } else if (acertoVencedor.acertou && acertoVencedor.tipo === 'vencedor') {
+                    icone = '<span style="color:var(--green); font-weight:bold;">✅</span>';
+                    corPalpite = 'var(--primary)';
+                    bgStyle = 'background: rgba(0, 146, 221, 0.05); border-left: 4px solid var(--primary);';
+                    textoExplicacao = 'Acertou o vencedor';
+                } else {
+                    icone = '<span style="color: #E94362; font-weight:bold; font-size: 1.2rem;">❌</span>';
+                    corPalpite = 'var(--text-color)';
+                    bgStyle = 'background: rgba(233, 67, 98, 0.05); border-left: 4px solid var(--border-color);';
+                    textoExplicacao = 'Errou o resultado';
+                }
                 
                 historicoHTML += `<div class="history-item" style="${bgStyle}">
                     <div>
                         <div style="margin-bottom:5px;"><strong>${header}</strong></div>
-                        <div style="font-size:0.85rem; color:var(--gray);">${detalhes.detalhes.join(', ')}</div>
+                        <div style="font-size:0.85rem; color:var(--gray);">${textoExplicacao}</div>
                     </div>
                     <div style="text-align:right;">
                         <div style="margin-bottom:5px;">
                             <span style="color:${corPalpite}; font-weight:600;">${palpite}</span> 
                             ${icone}
-                            ${pontosDisplay}
                         </div>
                     </div>
                 </div>`;
@@ -503,9 +457,9 @@ function searchUserPerformance(name) {
         });
         
         document.getElementById('user-historico').innerHTML = historicoHTML || '<p style="text-align:center;padding:20px;color:#999;">Nenhum palpite registrado ainda.</p>';
-        document.getElementById('user-total-pontos').innerText = pontuacao.totalPontos;
-        document.getElementById('user-jogos').innerText = pontuacao.jogosDisputados;
-        document.getElementById('user-exatos').innerText = pontuacao.totalExatos;
+        document.getElementById('user-total-pontos').innerText = user[ptsKey];
+        document.getElementById('user-jogos').innerText = disputados;
+        document.getElementById('user-exatos').innerText = exatos;
     } else {
         resultDiv.classList.add('hidden');
     }
@@ -516,6 +470,7 @@ function popularSelectParticipantes() {
     if (!select) return;
     
     const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
     
     select.innerHTML = '<option value="">👇 Selecione seu nome na lista</option>';
     
@@ -525,7 +480,7 @@ function popularSelectParticipantes() {
     
     participantesOrdenados.forEach(row => {
         const nome = row[partKey];
-        const pontos = row['_pontosCalculados'] || 0;
+        const pontos = row[ptsKey];
         const option = document.createElement('option');
         option.value = nome;
         option.textContent = `${nome} — ${pontos} pts`;
@@ -536,13 +491,14 @@ function popularSelectParticipantes() {
 function updateGlobalStats() {
     const statsContainer = document.getElementById('geral-stats');
     const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
     const ptsIndex = appData.headers.findIndex(h => h.toLowerCase().includes('ponto'));
     
     const total = appData.rows.length;
-    const pontuaram = appData.rows.filter(r => (r['_pontosCalculados'] || 0) > 0).length;
+    const pontuaram = appData.rows.filter(r => parseInt(r[ptsKey]) > 0).length;
     const lider = appData.rows[0] ? appData.rows[0][partKey] : '-';
     const totalExatos = appData.rows.reduce((sum, r) => sum + (r['_vitorias'] || 0), 0);
-    const mediaPontos = total > 0 ? (appData.rows.reduce((sum, r) => sum + (r['_pontosCalculados'] || 0), 0) / total).toFixed(1) : 0;
+    const mediaPontos = total > 0 ? (appData.rows.reduce((sum, r) => sum + parseInt(r[ptsKey] || 0), 0) / total).toFixed(1) : 0;
     
     statsContainer.innerHTML = `
         <div class="stat-card">
@@ -576,6 +532,7 @@ function renderCharts() {
     if (appData.rows.length === 0) return;
     const themeDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const txt = themeDark ? '#FFF' : '#1D1D1B';
+    const ptsK = appData.headers.find(h => h.toLowerCase().includes('ponto'));
     const partK = appData.headers.find(h => h.toLowerCase().includes('participante'));
 
     if (charts.pontos) charts.pontos.destroy();
@@ -583,7 +540,7 @@ function renderCharts() {
 
     const counts = {};
     appData.rows.forEach(r => { 
-        const p = r['_pontosCalculados'] || 0; 
+        const p = parseInt(r[ptsK]) || 0; 
         counts[p] = (counts[p] || 0) + 1; 
     });
 
@@ -614,7 +571,7 @@ function renderCharts() {
         data: { 
             labels: top10.map(r => r[partK]), 
             datasets: [{ 
-                data: top10.map(r => r['_pontosCalculados'] || 0), 
+                data: top10.map(r => parseInt(r[ptsK]) || 0), 
                 backgroundColor: ['#0092DD', '#FDC533', '#2FAC66', '#E94362', '#005CA9', '#D88BB6', '#954B97', '#C6C6C6', '#1D1D1B', '#333333'] 
             }] 
         },
