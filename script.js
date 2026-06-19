@@ -209,7 +209,114 @@ function renderPredictions() {
     thead.innerHTML = `<tr><th>Participante</th>${games.map(g => `<th>${g}</th>`).join('')}</tr>`;
     tbody.innerHTML = appData.rows.map(row => `<tr><td><strong>${row[partKey]}</strong></td>${games.map(g => `<td>${row[g] === '-' || !row[g] ? '' : row[g]}</td>`).join('')}</tr>`).join('');
 }
-
+// --- Renderização Detalhada do Desempate ---
+function renderDesempateDetalhes() {
+    const container = document.getElementById('desempate-detalhes');
+    container.innerHTML = '';
+    if (appData.rows.length === 0) return;
+    
+    const partKey = appData.headers.find(h => h.toLowerCase().includes('participante'));
+    const ptsKey = appData.headers.find(h => h.toLowerCase().includes('ponto'));
+    
+    // Pega os 3 primeiros ranks (podem ter múltiplas pessoas empatadas)
+    const ranks = [1, 2, 3];
+    const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    const labels = { 1: '1º Lugar', 2: '2º Lugar', 3: '3º Lugar' };
+    const colors = { 1: 'var(--yellow)', 2: 'var(--gray)', 3: '#CD7F32' };
+    
+    let html = `
+        <div class="desempate-header">
+            <h3><i class="fa-solid fa-scale-balanced"></i> Como o Desempate Foi Definido</h3>
+            <p class="desempate-subtitle">Análise dos critérios aplicados para cada posição do pódio</p>
+        </div>
+        <div class="desempate-grid">
+    `;
+    
+    ranks.forEach(rank => {
+        const grupo = appData.rows.filter(r => r._rank === rank);
+        if (grupo.length === 0) return;
+        
+        const nomes = grupo.map(r => r[partKey]).join(', ');
+        const pontos = grupo[0][ptsKey];
+        const exatos = grupo[0]['_vitorias'] || 0;
+        const participacoes = grupo[0]['_participacoes'] || 0;
+        const empatou = grupo.length > 1;
+        
+        // Verifica qual critério definiu a posição
+        let criterioDefinidor = '';
+        let statusBadge = '';
+        
+        if (empatou) {
+            statusBadge = `<span class="badge empate">🤝 EMPATE TOTAL — Dividem a posição</span>`;
+            criterioDefinidor = 'Todos os critérios aplicados resultaram em igualdade';
+        } else {
+            // Verifica se o próximo do ranking tem mesmo pontos
+            const proximo = appData.rows.find(r => r._rank === rank + 1);
+            if (proximo) {
+                const ptsAtual = parseInt(pontos);
+                const ptsProx = parseInt(proximo[ptsKey]);
+                
+                if (ptsAtual > ptsProx) {
+                    criterioDefinidor = '✅ Definido pelo <strong>1º critério (Pontuação)</strong>';
+                    statusBadge = `<span class="badge definido">🏆 Posição definida</span>`;
+                } else {
+                    // Mesma pontuação, olha próximo critério
+                    const exatosProx = proximo['_vitorias'] || 0;
+                    if (exatos > exatosProx) {
+                        criterioDefinidor = '✅ Definido pelo <strong>2º critério (Placares Exatos)</strong>';
+                        statusBadge = `<span class="badge critico2">⭐ Desempate nos exatos</span>`;
+                    } else if (exatos === exatosProx) {
+                        criterioDefinidor = '✅ Definido pelo <strong>3º critério (Participações)</strong>';
+                        statusBadge = `<span class="badge critico3">🎯 Desempate nas participações</span>`;
+                    }
+                }
+            } else {
+                criterioDefinidor = '✅ Único nesta posição';
+                statusBadge = `<span class="badge definido">🏆 Posição definida</span>`;
+            }
+        }
+        
+        html += `
+            <div class="desempate-card" style="border-top: 5px solid ${colors[rank]};">
+                <div class="desempate-card-header">
+                    <span class="desempate-medal">${medals[rank]}</span>
+                    <div>
+                        <h4>${labels[rank]}</h4>
+                        ${statusBadge}
+                    </div>
+                </div>
+                <div class="desempate-nomes">${nomes}</div>
+                <div class="desempate-stats">
+                    <div class="desempate-stat">
+                        <i class="fa-solid fa-trophy"></i>
+                        <div>
+                            <span class="stat-label">Pontos</span>
+                            <span class="stat-num">${pontos}</span>
+                        </div>
+                    </div>
+                    <div class="desempate-stat">
+                        <i class="fa-solid fa-bullseye"></i>
+                        <div>
+                            <span class="stat-label">Exatos</span>
+                            <span class="stat-num">${exatos}</span>
+                        </div>
+                    </div>
+                    <div class="desempate-stat">
+                        <i class="fa-solid fa-keyboard"></i>
+                        <div>
+                            <span class="stat-label">Palpites</span>
+                            <span class="stat-num">${participacoes}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="desempate-criterio">${criterioDefinidor}</div>
+            </div>
+        `;
+    });
+    
+    html += `</div>`;
+    container.innerHTML = html;
+}
 // --- Performance e Estatísticas Individuais ---
 function searchUserPerformance(name) {
     const resultDiv = document.getElementById('resultado-desempenho');
