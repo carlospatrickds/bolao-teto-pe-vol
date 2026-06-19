@@ -98,36 +98,48 @@
             </div>
         </section>
 
-        <!-- Aba 3 — Meu Desempenho -->
-        <section id="desempenho" class="tab-content">
-            <h2 class="section-title">Encontre seus resultados</h2>
-            <div class="search-box large">
-                <i class="fa-solid fa-user"></i>
-                <input type="text" id="search-desempenho" placeholder="Digite seu nome (ex: Kety, Thaw...)">
+<!-- Aba 3 — Meu Desempenho -->
+<section id="desempenho" class="tab-content">
+    <h2 class="section-title">Encontre seus resultados</h2>
+    
+    <!-- NOVO: Seletor de Participante -->
+    <div class="selector-container">
+        <div class="selector-box">
+            <i class="fa-solid fa-user-tag"></i>
+            <select id="select-participante">
+                <option value="">👇 Selecione seu nome na lista</option>
+                <!-- Opções injetadas via JS -->
+            </select>
+        </div>
+        <span class="selector-divider">ou</span>
+        <div class="search-box large">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="search-desempenho" placeholder="Digite seu nome (ex: Kety, Thaw...)">
+        </div>
+    </div>
+    
+    <div id="resultado-desempenho" class="hidden">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Pontuação Total</h3>
+                <p class="stat-value" id="user-total-pontos">0</p>
             </div>
-            
-            <div id="resultado-desempenho" class="hidden">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <h3>Pontuação Total</h3>
-                        <p class="stat-value" id="user-total-pontos">0</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Jogos Disputados</h3>
-                        <p class="stat-value" id="user-jogos">0</p>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Placares Exatos ⭐</h3>
-                        <p class="stat-value" id="user-exatos">0</p>
-                    </div>
-                </div>
-                
-                <h3 class="subsection-title" style="margin: 1.5rem 0 1rem 0; font-family: 'Fredoka';">Histórico de Palpites</h3>
-                <div class="history-list" id="user-historico">
-                    <!-- Injetado via JS -->
-                </div>
+            <div class="stat-card">
+                <h3>Jogos Disputados</h3>
+                <p class="stat-value" id="user-jogos">0</p>
             </div>
-        </section>
+            <div class="stat-card">
+                <h3>Placares Exatos </h3>
+                <p class="stat-value" id="user-exatos">0</p>
+            </div>
+        </div>
+        
+        <h3 class="subsection-title" style="margin: 1.5rem 0 1rem 0; font-family: 'Fredoka';">Histórico de Palpites</h3>
+        <div class="history-list" id="user-historico">
+            <!-- Injetado via JS -->
+        </div>
+    </div>
+</section>
 
         <!-- Aba 4 — Estatísticas -->
         <section id="estatisticas" class="tab-content">
