@@ -1,295 +1,183 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bolão TETO-PE - Copa do Mundo 2026</title>
+    <title>Bolão TETO-PE | Copa do Mundo 2026</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Montserrat:wght@400;600;700&family=Permanent+Marker&display=swap" rel="stylesheet">
     
-    <!-- Font Awesome -->
+    <!-- Font Awesome (Ícones) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- html2canvas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
+    <!-- Estilo Customizado -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Background decorativo -->
-    <div class="bg-decoration">
-        <div class="brush-stroke yellow"></div>
-        <div class="brush-stroke green"></div>
-        <div class="brush-stroke blue"></div>
-    </div>
-
-    <!-- Header -->
-    <header class="main-header">
-        <div class="container">
-            <div class="header-content">
-                <div class="mascot-container">
-                    <img src="https://i.imgur.com/RY1It3l.png" alt="Mascote TETO" class="mascot-img">
-                </div>
-                <div class="title-section">
-                    <h1 class="main-title">BOLÃO TETO-PE</h1>
-                    <p class="subtitle">Copa do Mundo 2026 <i class="fas fa-trophy trophy-icon"></i></p>
-                </div>
-                <div class="header-actions">
-                    <button id="themeToggle" class="btn-icon" title="Alternar tema">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                    <button id="shareBtn" class="btn-primary">
-                        <i class="fas fa-share-alt"></i> Compartilhar
-                    </button>
+    <!-- Textura suave de fundo -->
+    <div class="background-texture"></div>
+    
+    <!-- Cabeçalho -->
+    <header>
+        <div class="header-content">
+            <div class="title-container">
+                <i class="fa-solid fa-trophy trophy-icon"></i>
+                <div>
+                    <h1>BOLÃO TETO-PE</h1>
+                    <p class="subtitle">Copa do Mundo 2026 <i class="fa-regular fa-futbol"></i></p>
                 </div>
             </div>
+            <button id="theme-toggle" class="btn-icon" aria-label="Alternar Tema">
+                <i class="fa-solid fa-moon"></i>
+            </button>
         </div>
     </header>
 
-    <!-- Navegação -->
-    <nav class="main-nav">
-        <div class="container">
-            <div class="nav-tabs">
-                <button class="nav-tab active" data-tab="classificacao">
-                    <i class="fas fa-list-ol"></i> Classificação
-                </button>
-                <button class="nav-tab" data-tab="palpites">
-                    <i class="fas fa-futbol"></i> Palpites
-                </button>
-                <button class="nav-tab" data-tab="desempenho">
-                    <i class="fas fa-chart-line"></i> Meu Desempenho
-                </button>
-                <button class="nav-tab" data-tab="estatisticas">
-                    <i class="fas fa-chart-pie"></i> Estatísticas
-                </button>
-            </div>
-        </div>
+    <!-- Navegação por Abas (5 Abas Completas) -->
+    <nav class="tabs">
+        <button class="tab-btn active" data-target="classificacao"><i class="fa-solid fa-list-ol"></i> Classificação</button>
+        <button class="tab-btn" data-target="palpites"><i class="fa-solid fa-table-cells"></i> Palpites</button>
+        <button class="tab-btn" data-target="desempenho"><i class="fa-solid fa-user-check"></i> Meu Desempenho</button>
+        <button class="tab-btn" data-target="estatisticas"><i class="fa-solid fa-chart-pie"></i> Estatísticas</button>
+        <button class="tab-btn" data-target="regras"><i class="fa-solid fa-scale-balanced"></i> Regras</button>
     </nav>
 
     <!-- Conteúdo Principal -->
-    <main class="container">
-        <!-- Aba 1: Classificação -->
+    <main id="app-content">
+        
+        <!-- Aba 1 — Classificação -->
         <section id="classificacao" class="tab-content active">
-            <div class="section-header">
-                <h2><i class="fas fa-trophy"></i> Classificação Geral</h2>
+            <!-- Pódio Renderizado Dinamicamente pelo JS -->
+            <div class="top3-container" id="top3-cards"></div>
+            
+            <div class="controls-bar">
                 <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchClassificacao" placeholder="Buscar participante...">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" id="search-classificacao" placeholder="Buscar participante...">
+                </div>
+                <div class="action-buttons">
+                    <button id="btn-share" class="btn-action"><i class="fa-solid fa-share-nodes"></i> Compartilhar</button>
+                    <button id="btn-export" class="btn-action"><i class="fa-solid fa-camera"></i> Salvar Imagem</button>
                 </div>
             </div>
 
-            <!-- Top 3 Cards -->
-            <div class="top3-container" id="top3Container">
-                <div class="top-card first">
-                    <div class="top-medal">🥇</div>
-                    <div class="top-nome">Carregando...</div>
-                    <div class="top-pontos">-</div>
-                    <div class="top-label">pontos</div>
-                </div>
-                <div class="top-card second">
-                    <div class="top-medal">🥈</div>
-                    <div class="top-nome">Carregando...</div>
-                    <div class="top-pontos">-</div>
-                    <div class="top-label">pontos</div>
-                </div>
-                <div class="top-card third">
-                    <div class="top-medal">🥉</div>
-                    <div class="top-nome">Carregando...</div>
-                    <div class="top-pontos">-</div>
-                    <div class="top-label">pontos</div>
-                </div>
-            </div>
-
-            <!-- Tabela -->
-            <div class="table-container" id="tableContainer">
-                <table class="ranking-table" id="rankingTable">
+            <div class="table-responsive" id="tabela-export-area">
+                <table id="table-classificacao">
                     <thead>
                         <tr>
                             <th>Posição</th>
                             <th>Participante</th>
                             <th>Pontos</th>
-                            <th>Aproveitamento</th>
                         </tr>
                     </thead>
-                    <tbody id="rankingBody">
-                        <tr>
-                            <td colspan="4" style="text-align: center; padding: 2rem;">
-                                <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--azul-principal);"></i>
-                                <p>Carregando dados da planilha...</p>
-                            </td>
-                        </tr>
+                    <tbody>
+                        <!-- Injetado via JS -->
                     </tbody>
                 </table>
             </div>
-            
-            <button id="exportPng" class="btn-secondary">
-                <i class="fas fa-download"></i> Exportar Tabela (PNG)
-            </button>
         </section>
 
-        <!-- Aba 2: Palpites -->
+        <!-- Aba 2 — Palpites -->
         <section id="palpites" class="tab-content">
-            <div class="section-header">
-                <h2><i class="fas fa-futbol"></i> Palpites dos Jogos</h2>
-                <p class="section-desc">Confira os palpites de todos os participantes</p>
+            <h2 class="section-title">Palpites da Rodada</h2>
+            <div class="table-responsive">
+                <table id="table-palpites">
+                    <thead>
+                        <!-- Cabeçalho dinâmico baseado nos jogos do Sheets -->
+                    </thead>
+                    <tbody>
+                        <!-- Injetado via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Aba 3 — Meu Desempenho -->
+        <section id="desempenho" class="tab-content">
+            <h2 class="section-title">Encontre seus resultados</h2>
+            <div class="search-box large">
+                <i class="fa-solid fa-user"></i>
+                <input type="text" id="search-desempenho" placeholder="Digite seu nome (ex: Kety, Thaw...)">
             </div>
             
-            <div class="palpites-container">
-                <div class="table-scroll-wrapper">
-                    <table class="palpites-table" id="palpitesTable">
-                        <thead id="palpitesHead">
-                            <tr>
-                                <th colspan="4" style="text-align: center; padding: 2rem;">
-                                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem;"></i>
-                                    <p>Carregando palpites...</p>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody id="palpitesBody">
-                        </tbody>
-                    </table>
+            <div id="resultado-desempenho" class="hidden">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Pontuação Total</h3>
+                        <p class="stat-value" id="user-total-pontos">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Jogos Disputados</h3>
+                        <p class="stat-value" id="user-jogos">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Placares Exatos ⭐</h3>
+                        <p class="stat-value" id="user-exatos">0</p>
+                    </div>
+                </div>
+                
+                <h3 class="subsection-title" style="margin: 1.5rem 0 1rem 0; font-family: 'Fredoka';">Histórico de Palpites</h3>
+                <div class="history-list" id="user-historico">
+                    <!-- Injetado via JS -->
                 </div>
             </div>
         </section>
 
-        <!-- Aba 3: Meu Desempenho -->
-        <section id="desempenho" class="tab-content">
-            <div class="section-header">
-                <h2><i class="fas fa-user-chart"></i> Meu Desempenho</h2>
-            </div>
-
-            <div class="search-participant">
-                <input type="text" id="searchDesempenho" placeholder="Digite seu nome para ver seu desempenho...">
-                <button id="btnBuscarDesempenho" class="btn-primary">
-                    <i class="fas fa-search"></i> Buscar
-                </button>
-            </div>
-
-            <div id="desempenhoResult" class="desempenho-result" style="display: none;">
-                <div class="desempenho-header">
-                    <div class="participant-info">
-                        <h3 id="desempenhoNome"></h3>
-                        <span id="desempenhoPosicao" class="posicao-badge"></span>
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-card small">
-                            <span class="stat-value" id="desempenhoPontos">0</span>
-                            <span class="stat-label">Pontos</span>
-                        </div>
-                        <div class="stat-card small">
-                            <span class="stat-value" id="desempenhoJogos">0</span>
-                            <span class="stat-label">Jogos</span>
-                        </div>
-                        <div class="stat-card small">
-                            <span class="stat-value" id="desempenhoExatos">0</span>
-                            <span class="stat-label">Placares Exatos <i class="fas fa-star"></i></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="historico-container">
-                    <h4>Histórico de Palpites</h4>
-                    <div class="table-container">
-                        <table class="historico-table">
-                            <thead>
-                                <tr>
-                                    <th>Jogo</th>
-                                    <th>Seu Palpite</th>
-                                    <th>Resultado</th>
-                                    <th>Pontos</th>
-                                </tr>
-                            </thead>
-                            <tbody id="historicoBody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div id="desempenhoEmpty" class="empty-state">
-                <i class="fas fa-search"></i>
-                <p>Digite seu nome acima para ver seu desempenho</p>
-            </div>
-        </section>
-
-        <!-- Aba 4: Estatísticas -->
+        <!-- Aba 4 — Estatísticas -->
         <section id="estatisticas" class="tab-content">
-            <div class="section-header">
-                <h2><i class="fas fa-chart-pie"></i> Estatísticas do Bolão</h2>
+            <h2 class="section-title">Dados Gerais do Bolão</h2>
+            <div class="stats-grid" id="geral-stats">
+                <!-- Cards Injetados via JS -->
             </div>
-
-            <div class="stats-overview">
-                <div class="stat-card large">
-                    <i class="fas fa-users"></i>
-                    <span class="stat-value" id="totalParticipantes">0</span>
-                    <span class="stat-label">Total de Participantes</span>
-                </div>
-                <div class="stat-card large">
-                    <i class="fas fa-check-circle"></i>
-                    <span class="stat-value" id="participantesPontuaram">0</span>
-                    <span class="stat-label">Já Pontuaram</span>
-                </div>
-                <div class="stat-card large">
-                    <i class="fas fa-gamepad"></i>
-                    <span class="stat-value" id="totalRodadas">0</span>
-                    <span class="stat-label">Rodadas</span>
-                </div>
-                <div class="stat-card large highlight">
-                    <i class="fas fa-crown"></i>
-                    <span class="stat-value" id="liderCampeonato">-</span>
-                    <span class="stat-label">Líder</span>
-                </div>
-                <div class="stat-card large">
-                    <i class="fas fa-star"></i>
-                    <span class="stat-value" id="totalPlacaresExatos">0</span>
-                    <span class="stat-label">Placares Exatos</span>
-                </div>
-                <div class="stat-card large">
-                    <i class="fas fa-calendar-check"></i>
-                    <span class="stat-value" id="participacaoTotal">0%</span>
-                    <span class="stat-label">Participação Média</span>
-                </div>
-            </div>
-
+            
             <div class="charts-container">
                 <div class="chart-box">
-                    <h3>Distribuição de Pontos</h3>
-                    <canvas id="chartDistribuicao"></canvas>
+                    <h3 style="font-family: 'Fredoka'; margin-bottom: 15px;">Distribuição de Pontos</h3>
+                    <canvas id="pontosChart"></canvas>
                 </div>
                 <div class="chart-box">
-                    <h3>Top 10 Participantes</h3>
-                    <canvas id="chartTop10"></canvas>
-                </div>
-                <div class="chart-box full-width">
-                    <h3>Participação por Rodada</h3>
-                    <canvas id="chartRodadas"></canvas>
+                    <h3 style="font-family: 'Fredoka'; margin-bottom: 15px;">Top 10 Participantes</h3>
+                    <canvas id="top10Chart"></canvas>
                 </div>
             </div>
         </section>
+
+        <!-- Aba 5 — Regras -->
+        <section id="regras" class="tab-content">
+            <h2 class="section-title">Regras e Critérios de Desempate</h2>
+            <div class="rules-container">
+                <p>O nosso ranking é gerado de forma totalmente automatizada. Em caso de empate na pontuação dos participantes, o sistema realiza uma varredura aplicando os seguintes critérios de forma sequencial:</p>
+                <ol class="rules-list">
+                    <li>
+                        <strong><i class="fa-solid fa-star"></i> 1º Critério: Pontuação Total</strong>
+                        <p>Soma geral de todos os pontos obtidos acumulados na tabela.</p>
+                    </li>
+                    <li>
+                        <strong><i class="fa-solid fa-bullseye"></i> 2º Critério: Vitórias / Placares Exatos</strong>
+                        <p>Número de placares cravados de forma idêntica (caso a coluna respectiva esteja configurada e mapeada na planilha do Google Sheets).</p>
+                    </li>
+                    <li>
+                        <strong><i class="fa-solid fa-keyboard"></i> 3º Critério: Número de Participações</strong>
+                        <p>Quantidade de palpites válidos enviados. Deixar de apostar em uma rodada ou jogo remove a sua vantagem neste critério de desempate.</p>
+                    </li>
+                    <li>
+                        <strong><i class="fa-solid fa-handshake-angle"></i> Empate Total e Pódio Dividido</strong>
+                        <p>Caso o empate persista em todas as etapas anteriores, os participantes <strong>dividirão o mesmo degrau do pódio</strong> e a mesma posição no ranking geral de classificação.</p>
+                    </li>
+                </ol>
+            </div>
+        </section>
+
     </main>
 
-    <!-- Footer -->
-    <footer class="main-footer">
-        <div class="container">
-            <p>&copy; 2026 Bolão TETO-PE - Copa do Mundo</p>
-            <p class="footer-desc">Desenvolvido com <i class="fas fa-heart"></i> para a comunidade TETO</p>
-        </div>
-    </footer>
-
-    <!-- Loading -->
-    <div id="loading" class="loading-overlay">
-        <div class="loading-content">
-            <img src="https://i.imgur.com/RY1It3l.png" alt="Mascote" class="mascot-loading">
-            <p>Carregando dados do bolão...</p>
-        </div>
-    </div>
-
+    <!-- Dependências Externas (Gráficos e Exportação de PNG) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Script da Aplicação -->
     <script src="script.js"></script>
 </body>
 </html>
